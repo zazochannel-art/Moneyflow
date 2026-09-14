@@ -56,6 +56,11 @@ const preferencesSchema = z.object({
   currency: z.enum(['MDL', 'EUR', 'USD', 'RON']),
   language: z.enum(['ro', 'ru', 'en']),
   theme: z.enum(['dark', 'light']),
+  timezone: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9+_/-]{1,64}$/)
+    .catch('UTC'),
 });
 
 export async function updatePreferences(
@@ -69,6 +74,7 @@ export async function updatePreferences(
     currency: str(form, 'currency'),
     language: str(form, 'language'),
     theme: str(form, 'theme'),
+    timezone: str(form, 'timezone') || 'UTC',
   });
 
   if (!parsed.success) return failure('common.somethingWrong');

@@ -20,6 +20,7 @@ import {
   occurrencesBetween,
   remainingDaysInMonth,
   toDateOnly,
+  zonedNow,
 } from '@/lib/finance/period';
 import { parseAmount, formatMoney } from '@/lib/format';
 
@@ -70,6 +71,48 @@ test('occurrencesBetween counts only what falls inside the window', () => {
   assert.equal(occurrencesBetween(next, 'weekly', from, to).length, 2);
   // A due date already past the window contributes nothing.
   assert.equal(occurrencesBetween(new Date(2026, 6, 5), 'monthly', from, to).length, 0);
+});
+
+// --- timezone -------------------------------------------------------------
+
+test('zonedNow reads the wall clock of the given zone, not the server', () => {
+  // 21:30 UTC on 14 June is already the 15th in Chisinau (UTC+3 in summer).
+  const instant = new Date(Date.UTC(2026, 5, 14, 21, 30, 0));
+
+  assert.equal(toDateOnly(zonedNow('Europe/Chisinau', instant)), '2026-06-15');
+  assert.equal(toDateOnly(zonedNow('UTC', instant)), '2026-06-14');
+  // And west of UTC it can still be the previous day.
+  assert.equal(toDateOnly(zonedNow('America/New_York', instant)), '2026-06-14');
+});
+
+test('zonedNow handles local midnight, where the hour can render as 24', () => {
+  // 21:05 UTC is 00:05 the next day in Chisinau — the case that used to file a
+  // late-night expense under the wrong day.
+  const instant = new Date(Date.UTC(2026, 5, 14, 21, 5, 0));
+  const local = zonedNow('Europe/Chisinau', instant);
+
+  assert.equal(toDateOnly(local), '2026-06-15');
+  assert.equal(local.getHours(), 0);
+  assert.equal(local.getMinutes(), 5);
+});
+
+test('zonedNow crossing a month boundary moves the whole month window', () => {
+  // 22:00 UTC on 30 June is 01:00 on 1 July in Chisinau.
+  const instant = new Date(Date.UTC(2026, 5, 30, 22, 0, 0));
+  const local = zonedNow('Europe/Chisinau', instant);
+
+  assert.equal(toDateOnly(local), '2026-07-01');
+  // A fresh month means a full month of days again, not the last one.
+  assert.equal(remainingDaysInMonth(local), 31);
+  assert.equal(remainingDaysInMonth(zonedNow('UTC', instant)), 1);
+});
+
+test('zonedNow degrades to server time rather than throwing', () => {
+  const instant = new Date(Date.UTC(2026, 5, 14, 12, 0, 0));
+
+  assert.equal(zonedNow(undefined, instant).getTime(), instant.getTime());
+  assert.equal(zonedNow('', instant).getTime(), instant.getTime());
+  assert.equal(zonedNow('Not/AZone', instant).getTime(), instant.getTime());
 });
 
 test('daysUntilPayday rolls into next month once the day has passed', () => {

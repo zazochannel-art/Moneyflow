@@ -15,7 +15,7 @@ import {
   str,
   uuidField,
 } from '@/lib/actions/validate';
-import { toDateOnly } from '@/lib/finance/period';
+import { toDateOnly, zonedNow } from '@/lib/finance/period';
 
 function revalidateGoals() {
   for (const path of ['/dashboard', '/goals', '/afford', '/analytics']) revalidatePath(path);
@@ -104,7 +104,17 @@ export async function addContribution(_prev: ActionResult, form: FormData): Prom
   if (!parsed.success) return fieldFailure({ amount: 'tx.error.amount' });
 
   const input = parsed.data;
-  const today = toDateOnly(new Date());
+
+  // Dated in the user's day. A contribution made at 00:30 local belongs to
+  // today, and the dashboard — which also counts in the user's timezone —
+  // would otherwise file it under yesterday.
+  const { data: profile } = await session.supabase
+    .from('profiles')
+    .select('timezone')
+    .eq('user_id', session.userId)
+    .maybeSingle();
+
+  const today = toDateOnly(zonedNow((profile as { timezone?: string } | null)?.timezone));
 
   const { error } = await session.supabase.from('goal_contributions').insert({
     user_id: session.userId,
