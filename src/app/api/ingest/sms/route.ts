@@ -22,13 +22,7 @@ const MAX_BODY = 2000;
  * already, deliberately, declined to record.
  */
 export async function POST(request: Request) {
-  const payload = (await request.json().catch(() => null)) as {
-    token?: unknown;
-    text?: unknown;
-  } | null;
-
-  const token = typeof payload?.token === 'string' ? payload.token.trim() : '';
-  const text = typeof payload?.text === 'string' ? payload.text.slice(0, MAX_BODY) : '';
+  const { token, text } = await readRequest(request);
 
   if (!token || !text.trim()) {
     return NextResponse.json({ status: 'bad_request' }, { status: 400 });
@@ -82,4 +76,34 @@ export async function POST(request: Request) {
   return NextResponse.json(
     data ? { status: 'recorded', amount: tx.amount, merchant: tx.merchant } : { status: 'ignored' },
   );
+}
+
+/**
+ * Two shapes, because the forwarder on the phone builds the request by string
+ * concatenation.
+ *
+ * JSON is the obvious one and breaks the moment a message contains a quote or a
+ * line break — the request never reaches the parser, and a 400 tells nobody
+ * anything. So the plain-text form exists too: the token travels in a header
+ * and the body is the message, untouched, with nothing to escape.
+ */
+async function readRequest(request: Request): Promise<{ token: string; text: string }> {
+  const headerToken = (request.headers.get('x-moneyflow-token') ?? '').trim();
+  const queryToken = (new URL(request.url).searchParams.get('token') ?? '').trim();
+  const contentType = request.headers.get('content-type') ?? '';
+
+  if (contentType.includes('application/json')) {
+    const payload = (await request.json().catch(() => null)) as {
+      token?: unknown;
+      text?: unknown;
+    } | null;
+
+    return {
+      token: typeof payload?.token === 'string' ? payload.token.trim() : headerToken || queryToken,
+      text: typeof payload?.text === 'string' ? payload.text.slice(0, MAX_BODY) : '',
+    };
+  }
+
+  const body = await request.text().catch(() => '');
+  return { token: headerToken || queryToken, text: body.slice(0, MAX_BODY) };
 }
