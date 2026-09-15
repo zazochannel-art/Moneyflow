@@ -1,19 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { isSupabaseConfigured, supabaseAnonKey, supabaseUrl } from './env';
-
-const PUBLIC_PREFIXES = [
-  '/login',
-  '/register',
-  '/forgot-password',
-  '/reset-password',
-  '/auth',
-  '/offline',
-];
-
-function isPublic(pathname: string) {
-  return pathname === '/' || PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-}
+import { isPublicPath } from '@/lib/routes';
 
 /**
  * Refreshes the Supabase session and turns "not signed in" into a redirect.
@@ -61,7 +49,7 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  if (!user && !isPublic(pathname)) {
+  if (!user && !isPublicPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.searchParams.set('next', pathname);

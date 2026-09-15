@@ -10,6 +10,13 @@ export const dynamic = 'force-dynamic';
 const MAX_BODY = 2000;
 
 /**
+ * Shorter than this is not a token this app ever issued. `ingest_sms` refuses
+ * the same length, and that check is the one that matters; this one only keeps
+ * junk sent at a public endpoint from costing a database round trip each.
+ */
+const MIN_TOKEN = 20;
+
+/**
  * Receives a bank SMS forwarded from the phone and turns it into a transaction.
  *
  * There is no session here — the caller is an automation app, not a browser —
@@ -24,7 +31,7 @@ const MAX_BODY = 2000;
 export async function POST(request: Request) {
   const { token, text } = await readRequest(request);
 
-  if (!token || !text.trim()) {
+  if (token.length < MIN_TOKEN || !text.trim()) {
     return NextResponse.json({ status: 'bad_request' }, { status: 400 });
   }
 
