@@ -123,17 +123,23 @@ export function SmsForwarding({
         </div>
 
         {/* Kept in one place rather than split across tooltips: this is a setup
-            someone does once, on a different device, reading from this screen. */}
+            someone does once, on a different device, reading from this screen.
+            The plain-text form is the one shown because the phone builds the
+            request by pasting the message in — and a message with a quote in it
+            would break a JSON body before it ever reached the parser. */}
         <ol className="list-decimal space-y-1.5 pl-5 text-xs text-muted-foreground">
           <li>MacroDroid · Tasker</li>
           <li>Trigger: SMS Received → maib</li>
           <li>Action: HTTP Request → POST</li>
-          <li>Content type: application/json</li>
           <li>
-            Body:{' '}
-            <code className="font-mono break-all">
-              {'{"token":"<token>","text":"[sms_message]"}'}
-            </code>
+            Content type: <code className="font-mono">text/plain</code>
+          </li>
+          <li>
+            Header:{' '}
+            <code className="font-mono break-all">X-MoneyFlow-Token: &lt;token&gt;</code>
+          </li>
+          <li>
+            Body: <code className="font-mono">{'{sms_message}'}</code>
           </li>
         </ol>
       </div>
