@@ -24,6 +24,11 @@ const goalSchema = z.object({
 
 const payloadSchema = z.object({
   currency: z.enum(['MDL', 'EUR', 'USD', 'RON']),
+  timezone: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z0-9+_/-]{1,64}$/)
+    .catch('UTC'),
   income: z.number().finite().min(0),
   paydayDay: z.number().int().min(1).max(31),
   savingsTarget: z.number().finite().min(0),
@@ -74,6 +79,7 @@ export async function completeOnboarding(
     .from('profiles')
     .update({
       currency: input.currency,
+      timezone: input.timezone,
       monthly_income: input.income,
       payday_day: input.paydayDay,
       monthly_savings_target: input.savingsTarget,

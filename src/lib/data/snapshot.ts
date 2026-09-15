@@ -28,6 +28,7 @@ import {
   parseDateOnly,
   startOfDay,
   toDateOnly,
+  zonedNow,
 } from '@/lib/finance/period';
 
 /** PostgREST can hand numerics back as strings; nothing downstream should care. */
@@ -115,12 +116,28 @@ const TX_SELECT = `
  * than anywhere else: two screens disagreeing about how much money you have is
  * worse than either screen being slow.
  */
-export async function getFinancialSnapshot(now = new Date()): Promise<FinancialSnapshot | null> {
+export async function getFinancialSnapshot(clock = new Date()): Promise<FinancialSnapshot | null> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
+
+  // The profile is read before anything else, on its own, because it carries
+  // the timezone — and until we know that, "today" and "this month" have no
+  // definite meaning. Every window below is derived from it, so the cost of one
+  // extra single-row indexed lookup buys a dashboard that agrees with the
+  // user's wall clock instead of the server's.
+  const { data: profileRow } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('user_id', user.id)
+    .maybeSingle();
+
+  const profile = profileRow as Profile | null;
+  if (!profile) return null;
+
+  const now = zonedNow(profile.timezone, clock);
 
   const month = currentMonth(now);
   const monthFrom = toDateOnly(monthStart(month));
@@ -131,7 +148,6 @@ export async function getFinancialSnapshot(now = new Date()): Promise<FinancialS
   const windowFrom = toDateOnly(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 45));
 
   const [
-    profileRes,
     accountsRes,
     categoriesRes,
     txRes,
@@ -141,7 +157,6 @@ export async function getFinancialSnapshot(now = new Date()): Promise<FinancialS
     debtsRes,
     contributionsRes,
   ] = await Promise.all([
-    supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
     supabase.from('accounts').select('*').eq('is_archived', false).order('created_at'),
     supabase.from('categories').select('*').order('sort_order').order('name'),
     supabase
@@ -162,9 +177,6 @@ export async function getFinancialSnapshot(now = new Date()): Promise<FinancialS
     supabase.from('debts').select('*').eq('status', 'open').order('due_date', { nullsFirst: false }),
     supabase.from('goal_contributions').select('amount, date').gte('date', monthFrom).lte('date', monthTo),
   ]);
-
-  const profile = profileRes.data as Profile | null;
-  if (!profile) return null;
 
   const accounts = ((accountsRes.data ?? []) as Account[]).map((a) => ({
     ...a,

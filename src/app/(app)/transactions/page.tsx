@@ -17,6 +17,8 @@ export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 40;
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const TX_SELECT = `
   id, user_id, account_id, to_account_id, category_id, goal_id, recurring_id,
   type, amount, description, notes, date, created_at, updated_at,
@@ -57,7 +59,16 @@ export default async function TransactionsPage({
 
   if (type === 'income' || type === 'expense' || type === 'transfer') query = query.eq('type', type);
   if (categoryId) query = query.eq('category_id', categoryId);
-  if (accountId) query = query.or(`account_id.eq.${accountId},to_account_id.eq.${accountId}`);
+
+  // An account matches on either side of a transfer, which needs `.or()` — and
+  // `.or()` takes a filter string, not bound parameters. Everything else here
+  // goes through `.eq()`/`.ilike()`, which PostgREST parameterises; this one is
+  // assembled by hand, so the id is checked against the UUID shape first rather
+  // than trusted because it came from a link we generated.
+  if (accountId && UUID_PATTERN.test(accountId)) {
+    query = query.or(`account_id.eq.${accountId},to_account_id.eq.${accountId}`);
+  }
+
   if (search) query = query.ilike('description', `%${search.replace(/[%_]/g, '')}%`);
 
   const [{ data, count }, accountsRes, categoriesRes] = await Promise.all([

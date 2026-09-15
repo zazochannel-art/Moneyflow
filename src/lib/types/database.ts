@@ -30,6 +30,8 @@ export interface Profile {
   currency: CurrencyCode;
   language: LanguageCode;
   theme: string;
+  /** IANA timezone; defines this user's "today". */
+  timezone: string;
   monthly_income: number;
   monthly_savings_target: number;
   emergency_fund_target: number;

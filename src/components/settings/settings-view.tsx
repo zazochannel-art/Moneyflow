@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useState, useTransition } from 'react';
+import { useActionState, useEffect, useState, useSyncExternalStore, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Download, Sparkles, Trash2 } from 'lucide-react';
@@ -28,6 +28,19 @@ import {
   updatePreferences,
   updateProfile,
 } from '@/app/(app)/settings/actions';
+
+/** The zone cannot change mid-session, so there is nothing to subscribe to. */
+const subscribeToNothing = () => () => {};
+
+function readTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
+const readNoTimeZone = (): string | null => null;
 
 export function SettingsView({
   profile,
@@ -136,6 +149,7 @@ function PreferencesSection({ profile }: { profile: Profile }) {
   const [currency, setCurrency] = useState<CurrencyCode>(profile.currency);
   const [language, setLanguage] = useState<LanguageCode>(profile.language);
   const [theme, setTheme] = useState(profile.theme === 'light' ? 'light' : 'dark');
+  const [timezone, setTimezone] = useState(profile.timezone || 'UTC');
 
   useEffect(() => {
     if (state.ok && state.message) {
@@ -152,6 +166,7 @@ function PreferencesSection({ profile }: { profile: Profile }) {
         <input type="hidden" name="currency" value={currency} />
         <input type="hidden" name="language" value={language} />
         <input type="hidden" name="theme" value={theme} />
+        <input type="hidden" name="timezone" value={timezone} />
 
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label={t('settings.currency')}>
@@ -197,9 +212,37 @@ function PreferencesSection({ profile }: { profile: Profile }) {
           </Field>
         </div>
 
+        <TimezoneField value={timezone} onChange={setTimezone} />
+
         <SubmitButton pendingLabel={t('common.saving')}>{t('common.save')}</SubmitButton>
       </form>
     </SettingsSection>
+  );
+}
+
+/**
+ * The timezone decides what "today" means for the daily budget, so it is worth
+ * showing rather than hiding: the field states the detected zone and offers to
+ * adopt the browser's when the two have drifted apart (a move, a new device).
+ */
+function TimezoneField({ value, onChange }: { value: string; onChange: (tz: string) => void }) {
+  const { t } = useI18n();
+  // The browser's zone is external state: read it, don't mirror it into React.
+  const detected = useSyncExternalStore(subscribeToNothing, readTimeZone, readNoTimeZone);
+
+  return (
+    <Field label={t('settings.timezone')} hint={t('settings.timezoneHint')}>
+      <div className="flex flex-wrap items-center gap-2">
+        <code className="rounded-lg border border-border bg-background px-3 py-2 text-sm">
+          {value}
+        </code>
+        {detected && detected !== value ? (
+          <Button type="button" variant="outline" size="sm" onClick={() => onChange(detected)}>
+            {t('settings.timezoneUse', { zone: detected })}
+          </Button>
+        ) : null}
+      </div>
+    </Field>
   );
 }
 

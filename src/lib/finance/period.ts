@@ -126,3 +126,55 @@ export function daysUntilPayday(paydayDay: number, now: Date = new Date()): numb
 export function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
+
+/**
+ * "Now", as the user's wall clock reads it.
+ *
+ * Everything else in this file works off a Date's *local* getters, which on a
+ * server means UTC. For a product whose whole answer is scoped to "today",
+ * that is wrong for every user who is not on UTC: between their midnight and
+ * the UTC rollover the app would answer for yesterday, and an expense the
+ * browser dated today would not count toward today's spending.
+ *
+ * So this returns a Date whose local getters read as the wall clock in
+ * `timeZone` — the rest of the calendar maths then needs no changes at all.
+ * It is not a real instant and must not be used for durations or stored; it is
+ * a calendar reading, which is exactly what day and month boundaries need.
+ */
+export function zonedNow(timeZone: string | null | undefined, now: Date = new Date()): Date {
+  if (!timeZone) return now;
+
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).formatToParts(now);
+
+    const read = (type: Intl.DateTimeFormatPartTypes): number => {
+      const value = parts.find((part) => part.type === type)?.value;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : NaN;
+    };
+
+    const year = read('year');
+    const month = read('month');
+    const day = read('day');
+    // Some ICU builds render midnight as hour 24 under hour12: false.
+    const hour = read('hour') % 24;
+    const minute = read('minute');
+    const second = read('second');
+
+    if ([year, month, day, hour, minute, second].some((part) => Number.isNaN(part))) return now;
+
+    return new Date(year, month - 1, day, hour, minute, second);
+  } catch {
+    // An unknown or malformed zone should degrade to server time, never throw.
+    return now;
+  }
+}

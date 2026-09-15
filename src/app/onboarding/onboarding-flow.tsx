@@ -60,6 +60,15 @@ const GOAL_ICONS: Record<string, typeof Car> = {
 let keySeed = 0;
 const nextKey = () => `k${(keySeed += 1)}`;
 
+/** Falls back to UTC where Intl cannot say — never blocks onboarding. */
+function resolveTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
 export function OnboardingFlow({ categories }: { categories: Category[] }) {
   const { t, lang } = useI18n();
   const [step, setStep] = useState(1);
@@ -87,6 +96,8 @@ export function OnboardingFlow({ categories }: { categories: Category[] }) {
 
   const payload = JSON.stringify({
     currency,
+    // The browser knows the user's zone; the server would only know its own.
+    timezone: resolveTimeZone(),
     income: incomeValue,
     paydayDay: Number(paydayDay) || 1,
     savingsTarget: parseAmount(savings) || 0,

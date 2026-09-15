@@ -132,6 +132,13 @@ A negative result is never shown as a negative allowance: the allowance floors
 at zero and the card switches to a warning that says by how much planned
 spending exceeds available money.
 
+**"Today" is the user's today.** The server renders in UTC; the person lives
+somewhere else. Between their local midnight and the UTC rollover a naive
+server clock answers for yesterday — and an expense the browser dated today
+would not count toward today's spending. So the profile carries an IANA
+timezone, captured from the browser at onboarding and editable in Settings, and
+every day and month boundary is derived from it.
+
 ---
 
 ## Security

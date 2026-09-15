@@ -24,6 +24,23 @@ select (select count(*) from public.profiles)   as profiles,
        (select count(*) from public.accounts)   as accounts;
 select name from public.profiles order by name;
 
+\echo '--- timezone defaults and is shape-checked ---'
+select timezone as default_timezone from public.profiles limit 1;
+do $$
+begin
+  update public.profiles set timezone = 'Europe/Chisinau'
+   where user_id = '11111111-1111-1111-1111-111111111111';
+  raise notice 'a real IANA zone is accepted';
+end $$;
+do $$
+begin
+  update public.profiles set timezone = 'not a zone; drop table'
+   where user_id = '11111111-1111-1111-1111-111111111111';
+  raise exception 'a malformed timezone was allowed';
+exception when check_violation then
+  raise notice 'malformed timezone rejected, as expected';
+end $$;
+
 \echo '--- balance triggers ---'
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 set role authenticated;
