@@ -490,6 +490,8 @@ export const ro = {
   'error.noEnvHint': 'Lipsesc variabilele de mediu. Adaugă-le acolo unde rulează aplicația, apoi repornește sau redeploy.',
   'error.noMigrations': 'Baza de date răspunde, dar nu are încă tabelele.',
   'error.noMigrationsHint': 'Aplică migrările din supabase/migrations, apoi reîncarcă pagina.',
+  'error.envSeen': 'Ce vede aplicația acum',
+  'error.envNone': '(nicio variabilă NEXT_PUBLIC_)',
 } as const;
 
 export type TranslationKey = keyof typeof ro;

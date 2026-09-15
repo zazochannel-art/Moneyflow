@@ -488,4 +488,6 @@ export const ru: Dictionary = {
   'error.noEnvHint': 'Не заданы переменные окружения. Добавьте их там, где запущено приложение, затем перезапустите или сделайте redeploy.',
   'error.noMigrations': 'База данных отвечает, но таблиц в ней пока нет.',
   'error.noMigrationsHint': 'Примените миграции из supabase/migrations и обновите страницу.',
+  'error.envSeen': 'Что приложение видит сейчас',
+  'error.envNone': '(ни одной переменной NEXT_PUBLIC_)',
 };

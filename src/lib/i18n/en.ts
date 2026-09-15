@@ -488,4 +488,6 @@ export const en: Dictionary = {
   'error.noEnvHint': 'The environment variables are missing. Add them wherever the app runs, then restart or redeploy.',
   'error.noMigrations': 'The database answers, but has no tables yet.',
   'error.noMigrationsHint': 'Apply the migrations in supabase/migrations, then reload.',
+  'error.envSeen': 'What the app can see right now',
+  'error.envNone': '(no NEXT_PUBLIC_ variables at all)',
 };

@@ -25,6 +25,14 @@ export default async function SetupRequiredPage() {
   const { t } = await getT();
   const configured = isSupabaseConfigured();
 
+  // What the running process actually has, so a typo stops being a guessing
+  // game. Only `NEXT_PUBLIC_` names are listed, and only names: those are
+  // public by definition — they ship inside the browser bundle — while
+  // everything else in the environment stays unmentioned.
+  const seen = Object.keys(process.env)
+    .filter((key) => key.startsWith('NEXT_PUBLIC_'))
+    .sort();
+
   const Icon = configured ? Database : KeyRound;
   const title = configured ? t('error.noMigrations') : t('error.noEnv');
   const hint = configured ? t('error.noMigrationsHint') : t('error.noEnvHint');
@@ -53,6 +61,23 @@ export default async function SetupRequiredPage() {
             )}
           </ul>
         </div>
+
+        {configured ? null : (
+          <div className="rounded-lg border border-border/70 bg-card/60 p-3 text-left">
+            <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+              {t('error.envSeen')}
+            </p>
+            {seen.length > 0 ? (
+              <ul className="space-y-1 font-mono text-xs text-muted-foreground">
+                {seen.map((key) => (
+                  <li key={key}>{key}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="font-mono text-xs text-muted-foreground">{t('error.envNone')}</p>
+            )}
+          </div>
+        )}
       </div>
     </main>
   );
