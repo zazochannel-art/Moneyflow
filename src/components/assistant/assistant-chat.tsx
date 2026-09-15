@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bot, Loader2, SendHorizonal, ShieldCheck, Trash2, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -22,44 +22,60 @@ const SUGGESTIONS: TranslationKey[] = [
   'assistant.suggestion4',
 ];
 
-export function AssistantChat() {
+export function AssistantChat({ initialQuestion }: { initialQuestion?: string }) {
   const t = useT();
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const asked = useRef(false);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [turns, pending]);
 
-  const ask = async (question: string) => {
-    const trimmed = question.trim();
-    if (!trimmed || pending) return;
+  const ask = useCallback(
+    async (question: string) => {
+      const trimmed = question.trim();
+      if (!trimmed || pending) return;
 
-    const history = turns.slice(-6);
-    setTurns((prev) => [...prev, { role: 'user', content: trimmed }]);
-    setDraft('');
-    setPending(true);
+      // Read before the append, not inside the updater: React runs an updater
+      // during the next render, which is after the request below would already
+      // have gone out with an empty history.
+      const history = turns.slice(-6);
+      setTurns((prev) => [...prev, { role: 'user', content: trimmed }]);
+      setDraft('');
+      setPending(true);
 
-    try {
-      const response = await fetch('/api/assistant', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ question: trimmed, history }),
-      });
+      try {
+        const response = await fetch('/api/assistant', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ question: trimmed, history }),
+        });
 
-      const payload = (await response.json()) as { answer?: string };
-      setTurns((prev) => [
-        ...prev,
-        { role: 'assistant', content: payload.answer ?? t('assistant.error') },
-      ]);
-    } catch {
-      setTurns((prev) => [...prev, { role: 'assistant', content: t('assistant.error') }]);
-    } finally {
-      setPending(false);
-    }
-  };
+        const payload = (await response.json()) as { answer?: string };
+        setTurns((prev) => [
+          ...prev,
+          { role: 'assistant', content: payload.answer ?? t('assistant.error') },
+        ]);
+      } catch {
+        setTurns((prev) => [...prev, { role: 'assistant', content: t('assistant.error') }]);
+      } finally {
+        setPending(false);
+      }
+    },
+    [pending, t, turns],
+  );
+
+  // A question carried in from the dashboard is asked once, on arrival. The ref
+  // guard is what makes it once: a re-render that changes `ask` must not repost
+  // the same question.
+  useEffect(() => {
+    if (!initialQuestion || asked.current) return;
+    asked.current = true;
+    void ask(initialQuestion);
+  }, [initialQuestion, ask]);
 
   return (
     <div className="flex min-h-[70dvh] flex-col gap-4">

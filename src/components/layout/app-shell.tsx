@@ -1,6 +1,8 @@
 'use client';
 
 import { Suspense, useState, type ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
+import { cn } from '@/lib/utils';
 import { I18nProvider } from '@/lib/i18n/context';
 import type { Account, AppNotification, Category, CurrencyCode, LanguageCode } from '@/lib/types/database';
 import { QuickAddProvider } from './quick-add-context';
@@ -38,6 +40,12 @@ export function AppShell({
   children: ReactNode;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
+  const pathname = usePathname();
+
+  // The dashboard is the one page that lays out three columns, so it gets the
+  // room for them. Every other page stays at the reading width that suits a
+  // single column of forms and lists.
+  const wide = pathname === '/dashboard';
 
   return (
     <I18nProvider lang={lang} currency={currency}>
@@ -49,7 +57,12 @@ export function AppShell({
             <OfflineBanner />
             <Topbar name={name} email={email} notifications={notifications} />
 
-            <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-5 pb-28 sm:px-6 lg:pb-10">
+            <main
+              className={cn(
+                'mx-auto w-full flex-1 px-4 pt-5 pb-28 sm:px-6 lg:pb-10',
+                wide ? 'max-w-[1440px]' : 'max-w-5xl',
+              )}
+            >
               {children}
             </main>
           </div>
