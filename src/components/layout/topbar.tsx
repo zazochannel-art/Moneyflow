@@ -17,6 +17,11 @@ import { useT } from '@/lib/i18n/context';
 import { useQuickAdd } from './quick-add-context';
 import type { AppNotification } from '@/lib/types/database';
 
+/**
+ * The row itself. The frame around it — sticky, border, background, and the
+ * padding that keeps it clear of the status bar — belongs to the app shell,
+ * which also puts the offline banner inside it.
+ */
 export function Topbar({
   name,
   email,
@@ -30,7 +35,7 @@ export function Topbar({
   const { openQuickAdd } = useQuickAdd();
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background/85 px-4 backdrop-blur-lg">
+    <div className="flex h-14 items-center gap-2 px-4">
       <Link href="/dashboard" className="flex items-center gap-2 lg:hidden">
         <span className="flex size-7 items-center justify-center rounded-lg bg-primary/15 text-primary">
           <Wallet className="size-4" aria-hidden />
@@ -82,6 +87,6 @@ export function Topbar({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </header>
+    </div>
   );
 }
