@@ -323,6 +323,75 @@ select public.ingest_sms('wrong-token-entirely-here', null, 'expense',
        as no_token_no_notification;
 select count(*) as total_unparsed from public.notifications where kind = 'sms_unparsed';
 
+\echo '--- a token that was used says so, whatever the message was ---'
+-- Written only at the very end, the timestamp stayed empty for exactly the
+-- message someone sends while setting the phone up: a test string the parser
+-- cannot read. The settings screen then said "no messages yet", which is also
+-- what it says for a wrong token — the same words for the one case that works
+-- and the one that does not. Asserted rather than printed, because this is the
+-- only feedback the setup has.
+reset role;
+do $$
+begin
+  update public.sms_tokens set last_used_at = null
+   where user_id = '22222222-2222-2222-2222-222222222222';
+
+  if public.ingest_sms('bob-token-0123456789abcdef', null, 'expense',
+                       null, current_date, null, 'sms:9', 'inca un test') is not null then
+    raise exception 'an unreadable message produced a transaction';
+  end if;
+
+  if not exists (select 1 from public.sms_tokens
+                  where user_id = '22222222-2222-2222-2222-222222222222'
+                    and last_used_at is not null) then
+    raise exception 'a message that arrived with a good token left no trace of it';
+  end if;
+
+  raise notice 'a valid token is marked used even by a message nobody could read';
+end $$;
+
+do $$
+begin
+  update public.sms_tokens set last_used_at = null
+   where user_id = '22222222-2222-2222-2222-222222222222';
+
+  if public.ingest_sms('wrong-token-entirely-here', 20.00, 'expense',
+                       'NOPE', current_date, null, 'sms:10') is not null then
+    raise exception 'a wrong token wrote a transaction';
+  end if;
+
+  if exists (select 1 from public.sms_tokens where last_used_at is not null) then
+    raise exception 'a wrong token marked someone else token as used';
+  end if;
+
+  raise notice 'a wrong token leaves no mark, as expected';
+end $$;
+
+\echo '--- a purchase with nowhere to land is still seen ---'
+-- The money left the card whether or not this app has an account to put it in,
+-- so the message goes to the bell rather than nowhere.
+do $$
+begin
+  update public.accounts set is_archived = true
+   where user_id = '22222222-2222-2222-2222-222222222222';
+
+  if public.ingest_sms('bob-token-0123456789abcdef', 33.00, 'expense',
+                       'NO-ACCOUNT', current_date, null, 'sms:11') is not null then
+    raise exception 'a transaction was written without an account to hold it';
+  end if;
+
+  if not exists (select 1 from public.notifications
+                  where user_id = '22222222-2222-2222-2222-222222222222'
+                    and kind = 'sms_no_account') then
+    raise exception 'a purchase with nowhere to land disappeared silently';
+  end if;
+
+  update public.accounts set is_archived = false
+   where user_id = '22222222-2222-2222-2222-222222222222';
+
+  raise notice 'a purchase with no account to hold it reaches the bell, as expected';
+end $$;
+
 \echo '--- a token is only ever visible to its owner ---'
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 set role authenticated;
