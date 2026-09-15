@@ -211,3 +211,53 @@ export async function deleteAccountForever(_prev: ActionResult, form: FormData):
   revalidateEverything();
   redirect('/login');
 }
+
+// --- SMS ingest token ------------------------------------------------------
+
+/**
+ * Issues a token for the phone's SMS forwarder.
+ *
+ * The raw token is returned exactly once, here, and never stored: the database
+ * keeps only its SHA-256. A stolen copy of the table is then a list of hashes,
+ * which cannot be used to write anything.
+ *
+ * Issuing a new one revokes the old, because two live tokens for one phone is
+ * not a feature — it is a forgotten one still working.
+ */
+export async function issueSmsToken(): Promise<ActionResult<{ token: string }>> {
+  const session = await requireUser();
+  if (!session) return failure('auth.error.session');
+
+  const { randomBytes, createHash } = await import('node:crypto');
+  const token = randomBytes(32).toString('base64url');
+  const token_hash = createHash('sha256').update(token).digest('hex');
+
+  await session.supabase
+    .from('sms_tokens')
+    .update({ revoked_at: new Date().toISOString() })
+    .is('revoked_at', null);
+
+  const { error } = await session.supabase
+    .from('sms_tokens')
+    .insert({ user_id: session.userId, token_hash, label: 'telefon' });
+
+  if (error) return failure('error.body');
+
+  revalidatePath('/settings');
+  return success({ token });
+}
+
+export async function revokeSmsTokens(): Promise<ActionResult> {
+  const session = await requireUser();
+  if (!session) return failure('auth.error.session');
+
+  const { error } = await session.supabase
+    .from('sms_tokens')
+    .update({ revoked_at: new Date().toISOString() })
+    .is('revoked_at', null);
+
+  if (error) return failure('error.body');
+
+  revalidatePath('/settings');
+  return success();
+}

@@ -121,6 +121,23 @@ export function AccountDialog({
             />
           </Field>
 
+          {/* Only asked for on a card: the bank names the last four digits in
+              its SMS, and this is what tells a forwarded message which account
+              it belongs to. */}
+          {type === 'card' || type === 'bank' ? (
+            <Field label={t('accounts.cardLast4')} htmlFor="card_last4">
+              <Input
+                id="card_last4"
+                name="card_last4"
+                inputMode="numeric"
+                maxLength={4}
+                pattern="[0-9]{4}"
+                placeholder="8913"
+                defaultValue={account?.card_last4 ?? ''}
+              />
+            </Field>
+          ) : null}
+
           <Field label={t('categories.color')}>
             <ColorPicker value={color} onChange={setColor} />
           </Field>
