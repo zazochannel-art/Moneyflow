@@ -1,9 +1,11 @@
 'use client';
 
 import { useActionState, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { ArrowLeftRight, Minus, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
@@ -73,6 +75,23 @@ export function TransactionForm({
 
   const label =
     type === 'income' ? t('tx.addIncome') : type === 'transfer' ? t('tx.addTransfer') : t('tx.addExpense');
+
+  // With no account there is nothing to add an expense to, and the form knows
+  // it only by failing: an empty account select and a submission the server
+  // refuses without saying which field is wrong. The button that leads here is
+  // the most prominent one on an empty app, so this says the one thing that
+  // unblocks it instead. Placed after the hooks, which must all run either way.
+  if (accounts.length === 0) {
+    return (
+      <div className="space-y-3 rounded-xl border border-dashed border-border/70 p-5 text-center">
+        <p className="text-sm font-medium">{t('tx.noAccountTitle')}</p>
+        <p className="text-xs text-muted-foreground">{t('tx.noAccountBody')}</p>
+        <Button asChild>
+          <Link href="/accounts">{t('accounts.add')}</Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <form action={action} className="space-y-4">

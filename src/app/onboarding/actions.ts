@@ -24,6 +24,10 @@ const goalSchema = z.object({
 
 const payloadSchema = z.object({
   currency: z.enum(['MDL', 'EUR', 'USD', 'RON']),
+  accountName: z.string().trim().min(1).max(40),
+  // Negative is allowed: a card can be overdrawn, and a starting balance that
+  // lies to look tidy makes every number after it wrong.
+  balance: z.number().finite(),
   timezone: z
     .string()
     .trim()
@@ -97,7 +101,33 @@ export async function completeOnboarding(
 
   const categories = (categoryRows ?? []) as Pick<Category, 'id' | 'name'>[];
   const byName = new Map(categories.map((c) => [c.name.toLowerCase(), c.id]));
-  const accountId = (accountRows ?? [])[0]?.id ?? null;
+  let accountId = (accountRows ?? [])[0]?.id ?? null;
+
+  // --- the first account ----------------------------------------------------
+  //
+  // Onboarding used to finish without one, and an account is what every other
+  // number in this app hangs on. With none, the transaction form has nothing to
+  // select and refuses the first expense someone tries to add; a bank SMS
+  // forwarded from the phone arrives, is understood, and has nowhere to land.
+  // Both failures look like the app is broken, and neither says the one word
+  // that would fix it.
+  if (!accountId) {
+    const { data: created, error: accountError } = await supabase
+      .from('accounts')
+      .insert({
+        user_id: userId,
+        name: input.accountName,
+        type: 'card',
+        currency: input.currency,
+        // Money that existed before MONEYFLOW; transactions move it from here.
+        balance: input.balance,
+      })
+      .select('id')
+      .single();
+
+    if (accountError) return failure('common.somethingWrong');
+    accountId = created?.id ?? null;
+  }
 
   // --- fixed expenses become recurring charges ------------------------------
 
