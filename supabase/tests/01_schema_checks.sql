@@ -114,6 +114,143 @@ exception when insufficient_privilege then
   raise notice 'cross-user insert rejected, as expected';
 end $$;
 
+\echo '--- a row I own cannot point at rows I do not ---'
+-- RLS only ever asks whether `user_id` is mine. It says nothing about the ids
+-- the row carries, and for a while nothing else did either: an ordinary
+-- authenticated insert naming a stranger's account drove that account to -5000
+-- on a real database. The composite foreign keys make the reference and its
+-- owner one fact, checked on every write.
+--
+-- An attacker does not need to read the id to use it, so these carry Ana's ids
+-- across the role switch rather than trying to select them as Bob.
+reset role;
+create temp table stranger_ids as
+  select (select id from public.accounts
+           where user_id = '11111111-1111-1111-1111-111111111111' order by name limit 1) as account_id,
+         (select id from public.goals
+           where user_id = '11111111-1111-1111-1111-111111111111' limit 1) as goal_id,
+         (select id from public.categories
+           where user_id = '11111111-1111-1111-1111-111111111111' order by sort_order limit 1) as category_id;
+grant select on stranger_ids to public;
+
+set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
+set role authenticated;
+
+do $$
+begin
+  insert into public.transactions (user_id, account_id, type, amount, date)
+  select auth.uid(), account_id, 'expense', 5000, current_date from stranger_ids;
+  raise exception 'a transaction against a stranger account was allowed';
+exception when foreign_key_violation then
+  raise notice 'cross-owner account reference rejected, as expected';
+end $$;
+
+do $$
+begin
+  insert into public.goal_contributions (user_id, goal_id, amount, date)
+  select auth.uid(), goal_id, 100, current_date from stranger_ids;
+  raise exception 'a contribution to a stranger goal was allowed';
+exception when foreign_key_violation then
+  raise notice 'cross-owner goal reference rejected, as expected';
+end $$;
+
+do $$
+begin
+  insert into public.recurring_transactions
+    (user_id, name, amount, type, frequency, next_date, category_id)
+  select auth.uid(), 'Leak', 10, 'expense', 'monthly', current_date, category_id
+    from stranger_ids;
+  raise exception 'a recurring charge under a stranger category was allowed';
+exception when foreign_key_violation then
+  raise notice 'cross-owner category reference rejected, as expected';
+end $$;
+
+\echo '--- the balance helper is not on the API surface ---'
+-- It used to be `security definer`, return void rather than `trigger`, and sit
+-- in `public` — so PostgREST published it as an RPC and the grants let `anon`
+-- call it. The anon key ships in the browser bundle, so that was one request
+-- away from moving any balance an attacker could name.
+reset role;
+select count(*) as helper_left_in_public
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'public' and p.proname = 'apply_transaction_to_balances';
+select count(*) as helper_in_private
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+ where n.nspname = 'private' and p.proname = 'apply_transaction_to_balances'
+   and not p.prosecdef;
+select has_schema_privilege('anon', 'private', 'USAGE') as anon_reaches_private;
+
+do $$
+declare
+  leaked text;
+begin
+  -- Trigger-returning functions are left out: PostgreSQL refuses to call them
+  -- outside a trigger, so a grant on one is not a way in.
+  select string_agg(p.proname, ', ') into leaked
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public'
+     and p.prosecdef
+     and p.prorettype <> 'trigger'::regtype
+     and has_function_privilege('anon', p.oid, 'EXECUTE');
+  if leaked is not null then
+    raise exception 'anon can execute SECURITY DEFINER function(s): %', leaked;
+  end if;
+  raise notice 'no SECURITY DEFINER function in public is callable by anon';
+end $$;
+
+do $$
+declare
+  unexpected text;
+begin
+  -- `mf_delete_account` is the one on purpose: it must reach `auth.users`, and
+  -- it only ever deletes the caller's own id.
+  select string_agg(p.proname, ', ') into unexpected
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public'
+     and p.prosecdef
+     and p.prorettype <> 'trigger'::regtype
+     and p.proname <> 'mf_delete_account'
+     and has_function_privilege('authenticated', p.oid, 'EXECUTE');
+  if unexpected is not null then
+    raise exception 'signed-in users can execute unexpected SECURITY DEFINER function(s): %', unexpected;
+  end if;
+  raise notice 'mf_delete_account is the only definer function signed-in users can call';
+end $$;
+
+drop table stranger_ids;
+
+\echo '--- the reporting RPCs need a signed-in caller ---'
+do $$
+declare
+  open_to_anon text;
+begin
+  select string_agg(p.proname, ', ') into open_to_anon
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public'
+     and p.proname like 'mf\_%'
+     and has_function_privilege('anon', p.oid, 'EXECUTE');
+  if open_to_anon is not null then
+    raise exception 'anon can execute RPC(s): %', open_to_anon;
+  end if;
+  raise notice 'no mf_ RPC is callable without signing in';
+end $$;
+
+do $$
+declare
+  missing text;
+begin
+  select string_agg(p.proname, ', ') into missing
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public'
+     and p.proname like 'mf\_%'
+     and not has_function_privilege('authenticated', p.oid, 'EXECUTE');
+  if missing is not null then
+    raise exception 'signed-in users lost access to RPC(s): %', missing;
+  end if;
+  raise notice 'every mf_ RPC is still callable by signed-in users';
+end $$;
+
+
 \echo '--- recurring materialisation is idempotent ---'
 reset role;
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';

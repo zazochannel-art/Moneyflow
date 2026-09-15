@@ -148,7 +148,24 @@ Every table has Row Level Security enabled **and forced**, with policies keyed o
 service-role key in the application and no admin path: the browser and the
 server both talk to Supabase as the signed-in user, so the database — not
 application code — is what keeps one account out of another.
-`supabase/tests/01_schema_checks.sql` asserts this in both directions.
+
+RLS answers exactly one question, though: is this row mine? It says nothing
+about the ids the row *carries*, and that gap was real — a transaction that
+passed RLS on its own `user_id` could still name a stranger's `account_id`, and
+the balance trigger would move a stranger's money. So every reference is a
+**composite foreign key** on `(id, user_id)`: the row and the thing it points at
+have to belong to the same person, checked by the database on every write, in
+the same place it already checks the reference exists.
+
+The internal helper that moves balances lives in the `private` schema, which
+PostgREST does not publish, and runs as the invoker rather than the definer —
+so it has no URL, and a caller who reached it anyway would still be standing
+inside their own RLS. The only `security definer` function signed-in users can
+call is `mf_delete_account`, which deletes nothing but the caller's own id.
+
+`supabase/tests/01_schema_checks.sql` asserts all of this against a real
+PostgreSQL: isolation in both directions, the cross-owner references being
+refused, and the API surface staying closed.
 
 Passwords are handled entirely by Supabase Auth and never touch these tables.
 Every mutation is validated twice: in the browser for feedback, and again with
@@ -190,7 +207,7 @@ src/
     supabase/        browser · server · session clients
     i18n/            ro (reference) · ru · en
 supabase/
-  migrations/        schema · RLS + triggers · RPCs · demo data
+  migrations/        schema · RLS + triggers · RPCs · demo data · ownership keys
   tests/             what the schema is supposed to do
 ```
 
