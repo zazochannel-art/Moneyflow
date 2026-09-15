@@ -484,4 +484,8 @@ export const en: Dictionary = {
   'error.notFoundBody': "The link you followed doesn't lead anywhere.",
   'error.goHome': 'Back to the dashboard',
   'error.noSupabase': 'The database is not configured. See the README for setup steps.',
+  'error.noEnv': 'The app does not know which Supabase to talk to.',
+  'error.noEnvHint': 'The environment variables are missing. Add them wherever the app runs, then restart or redeploy.',
+  'error.noMigrations': 'The database answers, but has no tables yet.',
+  'error.noMigrationsHint': 'Apply the migrations in supabase/migrations, then reload.',
 };

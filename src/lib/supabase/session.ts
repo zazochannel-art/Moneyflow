@@ -26,7 +26,17 @@ function isPublic(pathname: string) {
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
-  if (!isSupabaseConfigured()) return response;
+  // No connection details means every page that touches the database is going
+  // to throw, and a thrown Server Component is a bare 500 with nothing in it
+  // for whoever has to fix the deploy. Send them to the page that names the
+  // missing variables instead.
+  if (!isSupabaseConfigured()) {
+    if (request.nextUrl.pathname === '/setup-required') return response;
+    const url = request.nextUrl.clone();
+    url.pathname = '/setup-required';
+    url.search = '';
+    return NextResponse.redirect(url);
+  }
 
   const supabase = createServerClient(supabaseUrl(), supabaseAnonKey(), {
     cookies: {
