@@ -75,6 +75,7 @@ export function OnboardingFlow({ categories }: { categories: Category[] }) {
 
   const [currency, setCurrency] = useState<CurrencyCode>('MDL');
   const [income, setIncome] = useState('');
+  const [balance, setBalance] = useState('');
   const [paydayDay, setPaydayDay] = useState('5');
   const [savings, setSavings] = useState('');
   const [emergency, setEmergency] = useState('');
@@ -99,6 +100,11 @@ export function OnboardingFlow({ categories }: { categories: Category[] }) {
     // The browser knows the user's zone; the server would only know its own.
     timezone: resolveTimeZone(),
     income: incomeValue,
+    // Onboarding ends by creating the first account, because every other number
+    // in the app hangs on one. The name is built here rather than on the server:
+    // the browser is the side that knows which language the person reads.
+    accountName: t('onboarding.step1.accountName'),
+    balance: parseAmount(balance) || 0,
     paydayDay: Number(paydayDay) || 1,
     savingsTarget: parseAmount(savings) || 0,
     emergencyTarget: parseAmount(emergency) || 0,
@@ -156,6 +162,20 @@ export function OnboardingFlow({ categories }: { categories: Category[] }) {
                   onChange={(event) => setIncome(event.target.value)}
                   placeholder="15000"
                   autoFocus
+                />
+              </Field>
+
+              <Field
+                label={t('onboarding.step1.balance')}
+                htmlFor="balance"
+                hint={t('onboarding.step1.balanceHint')}
+              >
+                <MoneyInput
+                  id="balance"
+                  currency={currency}
+                  value={balance}
+                  onChange={(event) => setBalance(event.target.value)}
+                  placeholder="0"
                 />
               </Field>
 
