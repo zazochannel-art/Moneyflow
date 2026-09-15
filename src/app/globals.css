@@ -237,6 +237,14 @@
     -webkit-overflow-scrolling: touch;
   }
 
+  /* Installed on a phone, the app runs with a translucent status bar and
+     `viewport-fit=cover`, so the page really does start behind the clock.
+     Whatever sits at the very top or bottom of the frame has to say so itself,
+     or it renders underneath. */
+  .mf-safe-top {
+    padding-top: max(env(safe-area-inset-top), 0px);
+  }
+
   .mf-safe-bottom {
     padding-bottom: max(env(safe-area-inset-bottom), 0px);
   }

@@ -54,8 +54,15 @@ export function AppShell({
           <Sidebar />
 
           <div className="flex min-w-0 flex-1 flex-col">
-            <OfflineBanner />
-            <Topbar name={name} email={email} notifications={notifications} />
+            {/* One sticky block, not two stacked elements: on an installed
+                phone app the page starts behind the status bar, so exactly one
+                thing at the top may carry that padding. With the banner outside
+                it, going offline would push the bar down by the height of the
+                status bar and leave the banner itself under the clock. */}
+            <header className="mf-safe-top sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-lg">
+              <OfflineBanner />
+              <Topbar name={name} email={email} notifications={notifications} />
+            </header>
 
             <main
               className={cn(
