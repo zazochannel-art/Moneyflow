@@ -64,9 +64,13 @@ export interface Account {
   color: string;
   include_in_total: boolean;
   is_archived: boolean;
+  /** Last four digits of the card, so a forwarded bank SMS knows where to land. */
+  card_last4: string | null;
   created_at: string;
   updated_at: string;
 }
+
+export type TransactionSource = 'manual' | 'recurring' | 'sms' | 'import';
 
 export interface Transaction {
   id: string;
@@ -81,6 +85,11 @@ export interface Transaction {
   description: string | null;
   notes: string | null;
   date: string;
+  /** Who wrote this row: a person, a recurring charge, a bank SMS, an import. */
+  source: TransactionSource;
+  /** The message it came from, when it came from one. Also its identity, so the
+   *  same SMS forwarded twice stays one transaction. */
+  source_ref: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -221,4 +230,15 @@ export interface CategoryTotalsRow {
 export interface BalanceSeriesRow {
   day: string;
   balance: number;
+}
+
+export interface SmsToken {
+  id: string;
+  user_id: string;
+  /** SHA-256 of the token. The token itself is shown once and never stored. */
+  token_hash: string;
+  label: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
 }

@@ -186,11 +186,16 @@ declare
 begin
   -- Trigger-returning functions are left out: PostgreSQL refuses to call them
   -- outside a trigger, so a grant on one is not a way in.
+  -- `ingest_sms` is the one on purpose: the SMS forwarder has no session, so a
+  -- token is its credential and the function checks it before writing anything.
+  -- Named here rather than exempted by a pattern, so adding a second one is a
+  -- decision someone has to write down.
   select string_agg(p.proname, ', ') into leaked
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public'
      and p.prosecdef
      and p.prorettype <> 'trigger'::regtype
+     and p.proname <> 'ingest_sms'
      and has_function_privilege('anon', p.oid, 'EXECUTE');
   if leaked is not null then
     raise exception 'anon can execute SECURITY DEFINER function(s): %', leaked;
@@ -209,7 +214,7 @@ begin
    where n.nspname = 'public'
      and p.prosecdef
      and p.prorettype <> 'trigger'::regtype
-     and p.proname <> 'mf_delete_account'
+     and p.proname not in ('mf_delete_account', 'ingest_sms')
      and has_function_privilege('authenticated', p.oid, 'EXECUTE');
   if unexpected is not null then
     raise exception 'signed-in users can execute unexpected SECURITY DEFINER function(s): %', unexpected;
@@ -250,6 +255,80 @@ begin
   raise notice 'every mf_ RPC is still callable by signed-in users';
 end $$;
 
+
+\echo '--- SMS ingest writes only for a valid token ---'
+-- The forwarder has no session: the token is the whole of its authority. These
+-- assert that it is also the whole of its reach.
+reset role;
+insert into public.sms_tokens (user_id, token_hash, label)
+values ('22222222-2222-2222-2222-222222222222',
+        encode(digest('bob-token-0123456789abcdef', 'sha256'), 'hex'), 'phone');
+
+-- Ana's card, so a mis-routed message would be visible immediately.
+update public.accounts set card_last4 = '4321'
+ where user_id = '11111111-1111-1111-1111-111111111111' and name = 'Cash';
+
+select public.ingest_sms('bob-token-0123456789abcdef', 250.00, 'expense',
+                         'LINELLA', current_date, null, 'sms:1') is not null
+       as valid_token_wrote;
+
+select public.ingest_sms('not-the-right-token-at-all', 999.00, 'expense',
+                         'HACK', current_date, null, 'sms:2') is null
+       as wrong_token_wrote_nothing;
+
+select public.ingest_sms(null, 999.00, 'expense', 'HACK', current_date, null, 'sms:3') is null
+       as null_token_wrote_nothing;
+
+select public.ingest_sms('bob-token-0123456789abcdef', -5, 'expense',
+                         'NEGATIVE', current_date, null, 'sms:4') is null
+       as negative_amount_refused;
+
+\echo '--- SMS ingest cannot reach across users ---'
+-- Bob's token names Ana's card number. The account lookup is scoped to the
+-- token's owner, so the only thing that can happen is Bob's own account.
+select public.ingest_sms('bob-token-0123456789abcdef', 77.00, 'expense',
+                         'CROSS', current_date, '4321', 'sms:5') is not null
+       as wrote_somewhere;
+select count(*) as landed_on_ana from public.transactions
+ where user_id = '11111111-1111-1111-1111-111111111111' and description = 'CROSS';
+select count(*) as landed_on_bob from public.transactions
+ where user_id = '22222222-2222-2222-2222-222222222222' and description = 'CROSS';
+
+\echo '--- the same message twice is one transaction ---'
+select public.ingest_sms('bob-token-0123456789abcdef', 250.00, 'expense',
+                         'LINELLA', current_date, null, 'sms:1') is null
+       as duplicate_refused;
+select count(*) as linella_rows from public.transactions where description = 'LINELLA';
+
+\echo '--- a revoked token writes nothing ---'
+update public.sms_tokens set revoked_at = now()
+ where user_id = '22222222-2222-2222-2222-222222222222';
+select public.ingest_sms('bob-token-0123456789abcdef', 10.00, 'expense',
+                         'AFTER-REVOKE', current_date, null, 'sms:6') is null
+       as revoked_token_wrote_nothing;
+update public.sms_tokens set revoked_at = null
+ where user_id = '22222222-2222-2222-2222-222222222222';
+
+\echo '--- a message the parser could not read is kept, not dropped ---'
+select public.ingest_sms('bob-token-0123456789abcdef', null, 'expense',
+                         null, current_date, null, 'sms:7',
+                         'Ceva ce nu seamana cu nimic cunoscut') is null
+       as unparsed_wrote_no_transaction;
+select count(*) as unparsed_notifications from public.notifications
+ where user_id = '22222222-2222-2222-2222-222222222222' and kind = 'sms_unparsed';
+
+\echo '--- an unparsed message without a token is still nothing ---'
+select public.ingest_sms('wrong-token-entirely-here', null, 'expense',
+                         null, current_date, null, 'sms:8', 'text oarecare') is null
+       as no_token_no_notification;
+select count(*) as total_unparsed from public.notifications where kind = 'sms_unparsed';
+
+\echo '--- a token is only ever visible to its owner ---'
+set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
+set role authenticated;
+select count(*) as ana_sees_bob_tokens from public.sms_tokens
+ where user_id = '22222222-2222-2222-2222-222222222222';
+reset role;
 
 \echo '--- recurring materialisation is idempotent ---'
 reset role;

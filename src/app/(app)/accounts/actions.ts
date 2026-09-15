@@ -13,6 +13,13 @@ const schema = z.object({
   balance: amountField,
   color: hexColor,
   include_in_total: z.boolean(),
+  // The four digits the bank's SMS names, so a forwarded message lands on the
+  // card it was actually spent from. Empty means "don't route anything here".
+  card_last4: z
+    .string()
+    .trim()
+    .regex(/^\d{4}$|^$/)
+    .transform((value) => (value === '' ? null : value)),
 });
 
 function parse(form: FormData) {
@@ -23,6 +30,7 @@ function parse(form: FormData) {
     balance: str(form, 'balance') || '0',
     color: str(form, 'color') || '#06B6D4',
     include_in_total: bool(form, 'include_in_total'),
+    card_last4: str(form, 'card_last4'),
   });
 }
 
@@ -53,6 +61,7 @@ export async function saveAccount(_prev: ActionResult, form: FormData): Promise<
         balance: input.balance,
         color: input.color,
         include_in_total: input.include_in_total,
+        card_last4: input.card_last4,
       })
       .eq('id', id);
     if (error) return failure('common.somethingWrong');
@@ -67,6 +76,7 @@ export async function saveAccount(_prev: ActionResult, form: FormData): Promise<
       balance: input.balance,
       color: input.color,
       include_in_total: input.include_in_total,
+      card_last4: input.card_last4,
     });
     if (error) return failure('common.somethingWrong');
   }
