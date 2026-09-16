@@ -10,6 +10,10 @@ test('the SMS endpoint is reachable without a session', () => {
   assert.equal(isPublicPath('/api/ingest/sms'), true);
 });
 
+test('the scheduler is reachable without a session', () => {
+  assert.equal(isPublicPath('/api/cron/recurring'), true);
+});
+
 test('the sign-in screens and the landing page stay public', () => {
   for (const path of [
     '/',
@@ -41,4 +45,5 @@ test('everything holding a signed-in user data stays behind the session', () => 
 test('a public prefix does not open a path that merely starts with its letters', () => {
   assert.equal(isPublicPath('/logins-secret'), false);
   assert.equal(isPublicPath('/api/ingest/sms-admin'), false);
+  assert.equal(isPublicPath('/api/cron-admin'), false);
 });

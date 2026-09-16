@@ -61,10 +61,12 @@ export async function POST(request: Request) {
 
     // The bell already has it. This is the same sentence, delivered to the
     // phone, because the whole point of the unreadable case is that nobody is
-    // looking at the app when it happens.
+    // looking at the app when it happens — and it opens the screen that can
+    // turn it into a transaction, so tapping it is the whole repair.
     await notify(supabase, token, {
       title: 'Mesaj neînțeles de la bancă',
       body: text.slice(0, 120),
+      url: `/transactions?message=${encodeURIComponent(fingerprint)}`,
     });
 
     return NextResponse.json({ status: 'skipped', reason: 'unrecognised' });

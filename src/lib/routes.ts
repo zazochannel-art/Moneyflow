@@ -21,6 +21,13 @@ const PUBLIC_PREFIXES = [
   // nothing. The other API routes are not here on purpose: they read the
   // signed-in user's data and must stay behind the session.
   '/api/ingest/sms',
+
+  // The scheduler has no session either: it is Vercel calling, on a clock. Its
+  // credential is `CRON_SECRET`, compared inside the route before it touches
+  // the database. Left off this list it would be answered with the login page,
+  // and a cron that "succeeds" every night while doing nothing is the worst
+  // shape this bug takes — nobody is watching a job that never complains.
+  '/api/cron',
 ];
 
 export function isPublicPath(pathname: string) {

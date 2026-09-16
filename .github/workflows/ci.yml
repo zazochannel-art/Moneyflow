@@ -108,6 +108,9 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ env.API_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ env.ANON_KEY }}
           NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+          # Pinned so the multi-currency total is the same number every run.
+          # A live rate would make the assertion move with the market.
+          EXCHANGE_RATES_PROVIDER: static
         run: |
           npx playwright install --with-deps chromium
           npm start &

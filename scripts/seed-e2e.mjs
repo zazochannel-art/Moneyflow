@@ -69,6 +69,22 @@ const [account] = await rest('/rest/v1/accounts', {
   }),
 });
 
+// A second account in another currency. The dashboard total used to add the
+// two figures together as if they were the same money; with EXCHANGE_RATES_PROVIDER
+// pinned to the built-in table the conversion is deterministic, so the smoke
+// test can assert the converted total to the leu.
+await rest('/rest/v1/accounts', {
+  method: 'POST',
+  headers: { Prefer: 'return=minimal' },
+  body: JSON.stringify({
+    user_id: userId,
+    name: 'Smoke euro',
+    type: 'savings',
+    currency: 'EUR',
+    balance: 100,
+  }),
+});
+
 // The description is what the smoke test looks for: a page that renders but
 // quietly drops its rows is the failure this whole exercise exists for.
 await rest('/rest/v1/transactions', {
@@ -84,4 +100,19 @@ await rest('/rest/v1/transactions', {
   }),
 });
 
-console.log('seeded: profile, account, one transaction');
+// A bank message the parser could not read. It used to reach the bell and stop
+// there; the smoke test asserts there is now a way out of it.
+await rest('/rest/v1/notifications', {
+  method: 'POST',
+  headers: { Prefer: 'return=minimal' },
+  body: JSON.stringify({
+    user_id: userId,
+    kind: 'sms_unparsed',
+    severity: 'warning',
+    title: 'Mesaj neînțeles de la bancă',
+    body: 'SMOKE UNREADABLE MESSAGE',
+    dedupe_key: 'sms:smoketest',
+  }),
+});
+
+console.log('seeded: profile, two accounts in two currencies, one transaction, one unreadable message');

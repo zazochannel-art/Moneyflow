@@ -32,6 +32,7 @@ import {
   zonedNow,
 } from '@/lib/finance/period';
 import { rows } from '@/lib/data/result';
+import { convert, getRates, type RateTable } from '@/lib/currency';
 
 /** PostgREST can hand numerics back as strings; nothing downstream should care. */
 function num(value: unknown): number {
@@ -70,6 +71,13 @@ export interface CategorySpend {
 export interface FinancialSnapshot {
   profile: Profile;
   accounts: Account[];
+  /**
+   * How the numbers below were brought into one currency, or null when every
+   * account already reports in the profile's own currency and nothing had to
+   * be converted. The dashboard shows the source; an approximate table must
+   * never pass for a published rate.
+   */
+  rates: RateTable | null;
   categories: Category[];
   totalBalance: number;
   savingsBalance: number;
@@ -213,24 +221,49 @@ export async function getFinancialSnapshot(clock = new Date()): Promise<Financia
   }));
   const debts = (rows<Debt>(debtsRes, 'debts')).map((d) => ({ ...d, amount: num(d.amount) }));
 
+  // --- one currency ---------------------------------------------------------
+  //
+  // Accounts may be held in MDL, EUR, USD or RON, and a transaction's amount is
+  // in the currency of the account it belongs to. Every total below adds those
+  // amounts together, so they have to be brought into the profile's currency
+  // first — otherwise 500 EUR and 500 MDL make "1000", which is not a number
+  // about anything.
+  //
+  // Rates are only fetched when there is something to convert. The common case
+  // is an account list that is entirely in one currency, and that case should
+  // not pay for a network call or inherit a fallback rate's uncertainty.
+  const foreignCurrency = accounts.some((a) => a.currency !== profile.currency);
+  const rates = foreignCurrency ? await getRates(profile.currency) : null;
+
+  const currencyOf = new Map(accounts.map((a) => [a.id, a.currency]));
+
+  /** An amount recorded against `accountId`, expressed in the profile currency. */
+  const toBase = (amount: number, accountId: string | null): number => {
+    if (!rates) return amount;
+    const currency = (accountId && currencyOf.get(accountId)) || profile.currency;
+    return convert(amount, currency, rates);
+  };
+
   const totalBalance = accounts
     .filter((a) => a.include_in_total)
-    .reduce((sum, a) => sum + a.balance, 0);
+    .reduce((sum, a) => sum + toBase(a.balance, a.id), 0);
   const savingsBalance = accounts
     .filter((a) => a.type === 'savings')
-    .reduce((sum, a) => sum + a.balance, 0);
+    .reduce((sum, a) => sum + toBase(a.balance, a.id), 0);
 
   // --- this month -----------------------------------------------------------
 
   const monthTx = transactions.filter((t) => t.date >= monthFrom && t.date <= monthTo);
-  const monthIncome = sumBy(monthTx, (t) => (t.type === 'income' ? t.amount : 0));
-  const monthExpenses = sumBy(monthTx, (t) => (t.type === 'expense' ? t.amount : 0));
-  const spentToday = sumBy(monthTx, (t) => (t.type === 'expense' && t.date === today ? t.amount : 0));
+  const monthIncome = sumBy(monthTx, (t) => (t.type === 'income' ? toBase(t.amount, t.account_id) : 0));
+  const monthExpenses = sumBy(monthTx, (t) => (t.type === 'expense' ? toBase(t.amount, t.account_id) : 0));
+  const spentToday = sumBy(monthTx, (t) =>
+    t.type === 'expense' && t.date === today ? toBase(t.amount, t.account_id) : 0,
+  );
 
   const savingsAccountIds = new Set(accounts.filter((a) => a.type === 'savings').map((a) => a.id));
   const transferredToSavings = sumBy(monthTx, (t) =>
     t.type === 'transfer' && t.to_account_id && savingsAccountIds.has(t.to_account_id)
-      ? t.amount
+      ? toBase(t.amount, t.to_account_id)
       : 0,
   );
   const goalContributions = sumBy(
@@ -256,7 +289,8 @@ export async function getFinancialSnapshot(clock = new Date()): Promise<Financia
     const until = limit < endOfMonth ? limit : endOfMonth;
     const occurrences = occurrencesBetween(next, entry.frequency, todayStart, until);
 
-    const total = occurrences.length * entry.amount;
+    const amount = toBase(entry.amount, entry.account_id);
+    const total = occurrences.length * amount;
     if (entry.type === 'expense') remainingFixedExpenses += total;
     else upcomingIncome += total;
 
@@ -264,7 +298,7 @@ export async function getFinancialSnapshot(clock = new Date()): Promise<Financia
       upcomingBills.push({
         id: `${entry.id}:${toDateOnly(occurrence)}`,
         name: entry.name,
-        amount: entry.amount,
+        amount,
         date: toDateOnly(occurrence),
         daysUntil: daysBetween(todayStart, occurrence),
         type: entry.type,
@@ -276,7 +310,7 @@ export async function getFinancialSnapshot(clock = new Date()): Promise<Financia
 
   const recurringMonthlyTotal = recurring
     .filter((r) => r.type === 'expense')
-    .reduce((sum, r) => sum + r.amount * monthlyFactor(r.frequency), 0);
+    .reduce((sum, r) => sum + toBase(r.amount, r.account_id) * monthlyFactor(r.frequency), 0);
 
   // --- budgets --------------------------------------------------------------
 
@@ -288,7 +322,7 @@ export async function getFinancialSnapshot(clock = new Date()): Promise<Financia
     if (t.type !== 'expense') continue;
     const key = t.category_id ?? 'uncategorised';
     const existing = spentByCategory.get(key) ?? { total: 0, count: 0 };
-    existing.total += t.amount;
+    existing.total += toBase(t.amount, t.account_id);
     existing.count += 1;
     spentByCategory.set(key, existing);
   }
@@ -352,7 +386,7 @@ export async function getFinancialSnapshot(clock = new Date()): Promise<Financia
 
   // --- score ----------------------------------------------------------------
 
-  const dailySpending = buildDailySeries(transactions, now, 30);
+  const dailySpending = buildDailySeries(transactions, now, 30, toBase);
 
   const moneyScore = calculateMoneyScore({
     monthlyIncome: monthIncome > 0 ? monthIncome : num(profile.monthly_income),
@@ -391,6 +425,7 @@ export async function getFinancialSnapshot(clock = new Date()): Promise<Financia
     },
     accounts,
     categories,
+    rates,
     totalBalance: round2(totalBalance),
     savingsBalance: round2(savingsBalance),
     monthIncome: round2(monthIncome),
@@ -445,11 +480,16 @@ function monthlyFactor(frequency: string): number {
 }
 
 /** Expense totals per day for the last `days` days, oldest first. */
-function buildDailySeries(transactions: Transaction[], now: Date, days: number): number[] {
+function buildDailySeries(
+  transactions: Transaction[],
+  now: Date,
+  days: number,
+  toBase: (amount: number, accountId: string | null) => number,
+): number[] {
   const byDay = new Map<string, number>();
   for (const t of transactions) {
     if (t.type !== 'expense') continue;
-    byDay.set(t.date, (byDay.get(t.date) ?? 0) + t.amount);
+    byDay.set(t.date, (byDay.get(t.date) ?? 0) + toBase(t.amount, t.account_id));
   }
 
   const series: number[] = [];

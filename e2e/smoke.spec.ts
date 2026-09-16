@@ -78,3 +78,38 @@ test('the transactions the account owns are listed, not an empty state', async (
   await expect(page.locator('body')).toContainText(/SMOKE MERCHANT/i);
   await expect(page.locator('body')).not.toContainText(/nu ai încă tranzac|no transactions yet/i);
 });
+
+test('a total across two currencies is converted, not added up', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/dashboard');
+
+  // The seed opens a card with 5000 MDL and spends 123.45 of it — the balance
+  // trigger takes that off, leaving 4876.55 — and a savings account with 100
+  // EUR. Adding the two figures gives 4976.55, a number about nothing;
+  // converting the euros at the pinned table's 19.5 gives 4876.55 + 1950 =
+  // 6826.55. The app showed the first kind of number for as long as the
+  // currency module sat in the codebase unused.
+  //
+  // Read off the total itself rather than the page text: every other figure on
+  // a dashboard is also digits, and a substring that happens to appear
+  // somewhere is not the same claim as the total being right.
+  const total = await page.getByTestId('total-balance').innerText();
+  expect(total.replace(/\D/g, '')).toBe('682655');
+
+  // And it says the number went through a rate, because a converted total and
+  // a plain one are indistinguishable on screen otherwise.
+  await expect(page.locator('body')).toContainText(/aproximativ|approximate|приблизительный/i);
+});
+
+test('an unreadable bank message can be turned into a transaction', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/transactions?message=sms%3Asmoketest');
+
+  // The text as the bank sent it, and a form to record it. Before this the
+  // notification showed the message and offered nothing to do about it, which
+  // left the only honest options as inventing the transaction by hand or
+  // letting the money go unrecorded.
+  await expect(page.locator('body')).toContainText('SMOKE UNREADABLE MESSAGE');
+  await expect(page.locator('input[name="amount"]')).toBeVisible();
+  await expect(page.locator('input[name="source_ref"]')).toHaveValue('sms:smoketest');
+});

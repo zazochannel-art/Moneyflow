@@ -31,12 +31,21 @@ export function TransactionForm({
   categories,
   transaction,
   defaultType = 'expense',
+  defaultDescription,
+  sourceRef,
   onDone,
 }: {
   accounts: Account[];
   categories: Category[];
   transaction?: TransactionWithRelations;
   defaultType?: TransactionType;
+  defaultDescription?: string;
+  /**
+   * The fingerprint of a bank message this transaction is being written for.
+   * Travels with the form so the message can be marked as dealt with, and so
+   * the same message cannot be recorded twice.
+   */
+  sourceRef?: string;
   onDone?: () => void;
 }) {
   const { t, currency } = useI18n();
@@ -95,6 +104,7 @@ export function TransactionForm({
 
   return (
     <form action={action} className="space-y-4">
+      {sourceRef ? <input type="hidden" name="source_ref" value={sourceRef} /> : null}
       {editing ? <input type="hidden" name="id" value={transaction!.id} /> : null}
       <input type="hidden" name="type" value={type} />
       <input type="hidden" name="account_id" value={accountId} />
@@ -184,7 +194,7 @@ export function TransactionForm({
             id="description"
             name="description"
             maxLength={120}
-            defaultValue={transaction?.description ?? ''}
+            defaultValue={transaction?.description ?? defaultDescription ?? ''}
             placeholder={t('common.description')}
           />
         </Field>

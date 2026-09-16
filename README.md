@@ -112,6 +112,22 @@ settings screen says notifications are not configured rather than offering a
 switch that does nothing. On iPhone they only work once the app is on the Home
 Screen — Safari in a tab cannot subscribe at all.
 
+**Recurring charges on a clock.** `vercel.json` schedules `/api/cron/recurring`
+once a day. Set `CRON_SECRET` to anything long and random — Vercel presents it
+as a bearer token and the route refuses everything else — and
+`SUPABASE_SERVICE_ROLE_KEY` to the project's service role key, which is used
+there and nowhere else in the app.
+
+Without those two the job answers `503` and nothing else changes: the dashboard
+still posts the current user's due charges when it opens, the way it always
+did. With them, a charge posts on its due date whether or not anyone opens the
+app, and the phone is told — which is the only way a notification about a bill
+can ever reach you, since nothing runs while the app is closed.
+
+The service role key bypasses Row Level Security entirely. It belongs in a
+server-side variable and must never be given a `NEXT_PUBLIC_` name, which would
+ship it to every browser.
+
 **Put the functions next to the database.** `vercel.json` pins them to `dub1`
 (Dublin) because the Supabase project is in `eu-west-1`. Rendering a page takes
 several round trips to the database, one after another — the session, the
@@ -159,6 +175,17 @@ every day and month boundary is derived from it.
 
 ## Security
 
+**Nothing reaches production that no migration describes.** `verify-schema.sh`
+proves the migrations build a database that behaves; it cannot prove the live
+database *is* that database. `compare-live-schema.sh` does that, listing every
+function, event trigger, table with its RLS state, and policy on both sides and
+diffing them. It exists because an event trigger — the one that switches Row
+Level Security on for any new table in `public` — ran in production for weeks
+while no file here created it, so a deployment rebuilt from this repository
+would have come up without the safety net and nothing would have said so.
+
+
+
 Every table has Row Level Security enabled **and forced**, with policies keyed on
 `user_id = auth.uid()` for select, insert, update and delete. There is no
 service-role key in the application and no admin path: the browser and the
@@ -198,6 +225,10 @@ npm run check        # typecheck + lint + unit tests
 npm test             # unit tests only
 npm run icons        # regenerate the app icons
 scripts/verify-schema.sh   # apply migrations to a throwaway PostgreSQL and assert behaviour
+
+# Does the live database match what those migrations describe?
+LIVE_DATABASE_URL=postgres://... DATABASE_URL=postgres://...scratch... \
+  scripts/compare-live-schema.sh
 ```
 
 `scripts/verify-schema.sh` needs a PostgreSQL 15+ (`DATABASE_URL`, or `initdb`
