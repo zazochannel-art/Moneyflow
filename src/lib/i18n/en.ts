@@ -153,6 +153,8 @@ export const en: Dictionary = {
   'dashboard.title': 'Dashboard',
   'dashboard.greeting': 'Hi{name}',
   'dashboard.totalBalance': 'Total balance',
+  'dashboard.rates.converted': 'Converted at the {source} rate of {date}',
+  'dashboard.rates.approximate': 'Approximate rate, not one published today',
   'dashboard.income': 'income',
   'dashboard.expenses': 'expenses',
   'dashboard.savings': 'savings',

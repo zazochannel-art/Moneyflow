@@ -116,6 +116,7 @@ export default async function DashboardPage() {
               income={snapshot.monthIncome}
               expenses={snapshot.monthExpenses}
               savings={snapshot.savedThisMonth}
+              rates={snapshot.rates}
             />
           </div>
 

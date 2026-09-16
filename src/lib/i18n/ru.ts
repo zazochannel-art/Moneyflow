@@ -153,6 +153,8 @@ export const ru: Dictionary = {
   'dashboard.title': 'Обзор',
   'dashboard.greeting': 'Привет{name}',
   'dashboard.totalBalance': 'Общий баланс',
+  'dashboard.rates.converted': 'Пересчитано по курсу {source} от {date}',
+  'dashboard.rates.approximate': 'Курс приблизительный, не опубликованный сегодня',
   'dashboard.income': 'доходы',
   'dashboard.expenses': 'расходы',
   'dashboard.savings': 'накопления',

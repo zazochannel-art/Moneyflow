@@ -78,3 +78,20 @@ test('the transactions the account owns are listed, not an empty state', async (
   await expect(page.locator('body')).toContainText(/SMOKE MERCHANT/i);
   await expect(page.locator('body')).not.toContainText(/nu ai încă tranzac|no transactions yet/i);
 });
+
+test('a total across two currencies is converted, not added up', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/dashboard');
+
+  // The seed holds 5000 MDL and 100 EUR. Adding the figures gives 5100, which
+  // is a number about nothing; converting at the pinned table's 19.5 gives
+  // 6950. The app reported the first one for as long as the currency module
+  // sat in the codebase unused.
+  const shown = (await page.locator('body').innerText()).replace(/[.\s ]/g, '');
+  expect(shown).toContain('6950');
+  expect(shown).not.toContain('5100');
+
+  // And it says the number went through a rate, because a converted total and
+  // a plain one are indistinguishable on screen otherwise.
+  await expect(page.locator('body')).toContainText(/aproximativ|approximate|приблизительный/i);
+});

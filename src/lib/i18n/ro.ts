@@ -155,6 +155,8 @@ export const ro = {
   'dashboard.title': 'Panou',
   'dashboard.greeting': 'Salut{name}',
   'dashboard.totalBalance': 'Sold total',
+  'dashboard.rates.converted': 'Convertit la cursul {source} din {date}',
+  'dashboard.rates.approximate': 'Curs aproximativ, nu unul publicat azi',
   'dashboard.income': 'venituri',
   'dashboard.expenses': 'cheltuieli',
   'dashboard.savings': 'economii',
