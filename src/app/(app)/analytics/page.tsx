@@ -20,6 +20,7 @@ import { getT } from '@/lib/i18n/server';
 import { formatMoney, formatMonthName } from '@/lib/format';
 import { toDateOnly } from '@/lib/finance/period';
 import type { BalanceSeriesRow, CategoryTotalsRow, MonthlyTotalsRow } from '@/lib/types/database';
+import { rows } from '@/lib/data/result';
 
 export const metadata: Metadata = { title: 'Statistici' };
 export const dynamic = 'force-dynamic';
@@ -53,7 +54,7 @@ export default async function AnalyticsPage({
   const { t, lang } = await getT(snapshot.profile.language);
   const currency = snapshot.profile.currency;
 
-  const monthly = ((monthlyRes.data ?? []) as MonthlyTotalsRow[]).map((row) => {
+  const monthly = (rows<MonthlyTotalsRow>(monthlyRes, 'monthly totals')).map((row) => {
     const date = new Date(row.period);
     return {
       label: formatMonthName(date.getFullYear(), date.getMonth() + 1, lang).split(' ')[0] ?? '',
@@ -62,7 +63,7 @@ export default async function AnalyticsPage({
     };
   });
 
-  const categories = ((categoryRes.data ?? []) as CategoryTotalsRow[]).map((row) => ({
+  const categories = (rows<CategoryTotalsRow>(categoryRes, 'category totals')).map((row) => ({
     id: row.category_id,
     name: row.name,
     icon: row.icon,
@@ -70,7 +71,7 @@ export default async function AnalyticsPage({
     total: Number(row.total),
   }));
 
-  const balance = ((balanceRes.data ?? []) as BalanceSeriesRow[]).map((row) => ({
+  const balance = (rows<BalanceSeriesRow>(balanceRes, 'the balance series')).map((row) => ({
     day: row.day,
     balance: Number(row.balance),
   }));

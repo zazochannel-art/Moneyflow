@@ -4,6 +4,7 @@ import { DebtsView } from '@/components/debts/debts-view';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/supabase/user';
 import type { Debt } from '@/lib/types/database';
+import { rows } from '@/lib/data/result';
 
 export const metadata: Metadata = { title: 'Datorii' };
 export const dynamic = 'force-dynamic';
@@ -13,13 +14,13 @@ export default async function DebtsPage() {
   const user = await getCurrentUser();
   if (!user) redirect('/login');
 
-  const { data } = await supabase
+  const result = await supabase
     .from('debts')
     .select('*')
     .order('status')
     .order('due_date', { nullsFirst: false });
 
-  const debts = ((data ?? []) as Debt[]).map((debt) => ({ ...debt, amount: Number(debt.amount) }));
+  const debts = rows<Debt>(result, 'debts').map((debt) => ({ ...debt, amount: Number(debt.amount) }));
 
   return <DebtsView debts={debts} />;
 }

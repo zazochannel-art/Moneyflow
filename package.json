@@ -2,7 +2,7 @@
   "name": "moneyflow",
   "version": "1.0.0",
   "private": true,
-  "description": "MONEYFLOW \u2014 personal finance that answers \"how much can I spend today?\"",
+  "description": "MONEYFLOW — personal finance that answers \"how much can I spend today?\"",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test \"tests/*.test.ts\"",
     "icons": "node scripts/generate-icons.mjs",
-    "check": "npm run typecheck && npm run lint && npm run test"
+    "check": "npm run typecheck && npm run lint && npm run test",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",
@@ -46,6 +47,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24.0.0",
     "@types/react": "^19.3.0",
@@ -55,6 +57,7 @@
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.13",
     "tw-animate-css": "^1.4.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "wait-on": "^9.1.0"
   }
 }

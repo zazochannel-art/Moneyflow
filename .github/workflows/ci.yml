@@ -55,3 +55,68 @@ jobs:
       # at module load, or a preview deploy breaks before it starts.
       - name: Build
         run: npm run build
+
+  smoke:
+    name: Every page opens with a real session
+    runs-on: ubuntu-latest
+
+    # The other job proves the code compiles and the schema behaves. Neither of
+    # those opens a page, which is how a Server Component calling into a client
+    # module, and a query whose relationship names had gone stale, both reached
+    # production green. This job signs in and looks.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Install
+        run: npm ci
+
+      # Generated rather than committed: the config file belongs to whichever
+      # CLI version is installed here, and a stale one fails in ways that have
+      # nothing to do with this app.
+      - name: Start Supabase
+        run: |
+          supabase init
+          supabase start
+          # `-o env` prints KEY="value"; $GITHUB_ENV takes KEY=value and would
+          # otherwise carry the quotes into the URL.
+          supabase status -o env | tr -d '"' >> "$GITHUB_ENV"
+
+      - name: Seed a signed-in user with something to look at
+        env:
+          SUPABASE_URL: ${{ env.API_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ env.SERVICE_ROLE_KEY }}
+        run: node scripts/seed-e2e.mjs
+
+      - name: Build against it
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ env.API_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ env.ANON_KEY }}
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+        run: npm run build
+
+      - name: Serve and open every page
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ env.API_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ env.ANON_KEY }}
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+        run: |
+          npx playwright install --with-deps chromium
+          npm start &
+          npx wait-on http://127.0.0.1:3000/login --timeout 60000
+          npm run test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-trace
+          path: test-results/
+          retention-days: 7

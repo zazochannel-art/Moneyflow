@@ -4,6 +4,7 @@ import { RecurringView } from '@/components/recurring/recurring-view';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/supabase/user';
 import type { Account, Category, RecurringTransaction } from '@/lib/types/database';
+import { rows } from '@/lib/data/result';
 
 export const metadata: Metadata = { title: 'Plăți recurente' };
 export const dynamic = 'force-dynamic';
@@ -33,7 +34,7 @@ export default async function RecurringPage() {
     supabase.from('categories').select('*').order('sort_order').order('name'),
   ]);
 
-  const entries = ((entriesRes.data ?? []) as RecurringTransaction[]).map((entry) => ({
+  const entries = (rows<RecurringTransaction>(entriesRes, 'recurring charges')).map((entry) => ({
     ...entry,
     amount: Number(entry.amount),
   }));
@@ -45,8 +46,8 @@ export default async function RecurringPage() {
   return (
     <RecurringView
       entries={entries}
-      accounts={(accountsRes.data ?? []) as Account[]}
-      categories={(categoriesRes.data ?? []) as Category[]}
+      accounts={rows<Account>(accountsRes, 'accounts')}
+      categories={rows<Category>(categoriesRes, 'categories')}
       monthlyTotal={Math.round(monthlyTotal)}
     />
   );

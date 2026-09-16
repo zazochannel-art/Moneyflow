@@ -4,6 +4,7 @@ import { AccountsView } from '@/components/accounts/accounts-view';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/supabase/user';
 import type { Account, Profile } from '@/lib/types/database';
+import { rows } from '@/lib/data/result';
 
 export const metadata: Metadata = { title: 'Conturi' };
 export const dynamic = 'force-dynamic';
@@ -18,7 +19,7 @@ export default async function AccountsPage() {
     supabase.from('profiles').select('currency').eq('user_id', user.id).maybeSingle(),
   ]);
 
-  const all = ((accountsRes.data ?? []) as Account[]).map((a) => ({ ...a, balance: Number(a.balance) }));
+  const all = (rows<Account>(accountsRes, 'accounts')).map((a) => ({ ...a, balance: Number(a.balance) }));
   const currency = (profileRes.data as Pick<Profile, 'currency'> | null)?.currency ?? 'MDL';
 
   return (

@@ -31,6 +31,7 @@ import {
   toDateOnly,
   zonedNow,
 } from '@/lib/finance/period';
+import { rows } from '@/lib/data/result';
 
 /** PostgREST can hand numerics back as strings; nothing downstream should care. */
 function num(value: unknown): number {
@@ -191,36 +192,26 @@ export async function getFinancialSnapshot(clock = new Date()): Promise<Financia
     supabase.from('goal_contributions').select('amount, date').gte('date', monthFrom).lte('date', monthTo),
   ]);
 
-  const accounts = ((accountsRes.data ?? []) as Account[]).map((a) => ({
+  const accounts = (rows<Account>(accountsRes, 'accounts')).map((a) => ({
     ...a,
     balance: num(a.balance),
   }));
-  const categories = (categoriesRes.data ?? []) as Category[];
-  // Every number this app is for — today's budget, what is left this month,
-  // whether you can afford something — is computed from these rows. A query
-  // that failed and one that found nothing are the same empty array, and the
-  // difference between them is the difference between "you have not spent
-  // anything" and "I do not know what you spent". Only the first is safe to
-  // show, so the second stops here.
-  if (txRes.error) {
-    throw new Error(`Could not read transactions: ${txRes.error.message}`);
-  }
-
-  const transactions = ((txRes.data ?? []) as unknown as TransactionWithRelations[]).map((t) => ({
+  const categories = rows<Category>(categoriesRes, 'categories');
+  const transactions = (rows<TransactionWithRelations>(txRes, 'transactions')).map((t) => ({
     ...t,
     amount: num(t.amount),
   }));
-  const recurring = ((recurringRes.data ?? []) as RecurringTransaction[]).map((r) => ({
+  const recurring = (rows<RecurringTransaction>(recurringRes, 'recurring charges')).map((r) => ({
     ...r,
     amount: num(r.amount),
   }));
-  const goals = ((goalsRes.data ?? []) as Goal[]).map((g) => ({
+  const goals = (rows<Goal>(goalsRes, 'goals')).map((g) => ({
     ...g,
     target_amount: num(g.target_amount),
     current_amount: num(g.current_amount),
     monthly_contribution: num(g.monthly_contribution),
   }));
-  const debts = ((debtsRes.data ?? []) as Debt[]).map((d) => ({ ...d, amount: num(d.amount) }));
+  const debts = (rows<Debt>(debtsRes, 'debts')).map((d) => ({ ...d, amount: num(d.amount) }));
 
   const totalBalance = accounts
     .filter((a) => a.include_in_total)
@@ -243,7 +234,7 @@ export async function getFinancialSnapshot(clock = new Date()): Promise<Financia
       : 0,
   );
   const goalContributions = sumBy(
-    (contributionsRes.data ?? []) as Array<{ amount: unknown }>,
+    rows<{ amount: unknown }>(contributionsRes, 'goal contributions'),
     (row) => num(row.amount),
   );
   // A transfer into a savings account and a goal contribution funded from that
