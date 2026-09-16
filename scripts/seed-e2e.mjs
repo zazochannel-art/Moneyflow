@@ -100,4 +100,19 @@ await rest('/rest/v1/transactions', {
   }),
 });
 
-console.log('seeded: profile, two accounts in two currencies, one transaction');
+// A bank message the parser could not read. It used to reach the bell and stop
+// there; the smoke test asserts there is now a way out of it.
+await rest('/rest/v1/notifications', {
+  method: 'POST',
+  headers: { Prefer: 'return=minimal' },
+  body: JSON.stringify({
+    user_id: userId,
+    kind: 'sms_unparsed',
+    severity: 'warning',
+    title: 'Mesaj neînțeles de la bancă',
+    body: 'SMOKE UNREADABLE MESSAGE',
+    dedupe_key: 'sms:smoketest',
+  }),
+});
+
+console.log('seeded: profile, two accounts in two currencies, one transaction, one unreadable message');

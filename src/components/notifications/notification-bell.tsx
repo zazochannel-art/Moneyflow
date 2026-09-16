@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/lib/i18n/context';
 import { formatDate } from '@/lib/format';
+import { notificationHref } from '@/lib/data/notification-link';
 import type { AppNotification } from '@/lib/types/database';
 
 const SEVERITY_STYLES: Record<string, string> = {
@@ -75,6 +76,7 @@ export function NotificationBell({ notifications }: { notifications: AppNotifica
         ) : (
           <ul className="max-h-80 overflow-y-auto">
             {notifications.map((notification) => {
+              const href = notificationHref(notification);
               const content = (
                 <>
                   <span
@@ -106,9 +108,9 @@ export function NotificationBell({ notifications }: { notifications: AppNotifica
 
               return (
                 <li key={notification.id} className="border-b border-border last:border-0">
-                  {notification.href ? (
+                  {href ? (
                     <Link
-                      href={notification.href}
+                      href={href}
                       onClick={() => setOpen(false)}
                       className="flex gap-2.5 px-4 py-3 transition-colors hover:bg-accent/50"
                     >

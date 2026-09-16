@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/shared/page-header';
 import { TransactionFilters } from '@/components/transactions/transaction-filters';
 import { TransactionList } from '@/components/transactions/transaction-list';
 import { AddTransactionButton } from '@/components/transactions/add-transaction-button';
+import { MessageToRecord } from '@/components/transactions/message-to-record';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/supabase/user';
 import { getT } from '@/lib/i18n/server';
@@ -60,6 +61,12 @@ export default async function TransactionsPage({
   const accountId = single('account');
   const search = single('q')?.trim();
 
+  // Set when the bell, or a notification on the phone, sends someone here to
+  // deal with a bank message the parser could not read. It is the message's
+  // fingerprint, and it is looked up rather than trusted: the row it finds is
+  // the only thing that puts the message's text on screen.
+  const messageRef = single('message')?.trim();
+
   const supabase = await createClient();
   const user = await getCurrentUser();
   if (!user) redirect('/login');
@@ -85,11 +92,25 @@ export default async function TransactionsPage({
 
   if (search) query = query.ilike('description', `%${search.replace(/[%_]/g, '')}%`);
 
-  const [{ data, count, error }, accountsRes, categoriesRes] = await Promise.all([
+  const [{ data, count, error }, accountsRes, categoriesRes, messageRes] = await Promise.all([
     query,
     supabase.from('accounts').select('*').eq('is_archived', false).order('created_at'),
     supabase.from('categories').select('*').order('sort_order').order('name'),
+    messageRef
+      ? supabase
+          .from('notifications')
+          .select('body, dedupe_key')
+          .eq('kind', 'sms_unparsed')
+          .eq('dedupe_key', messageRef)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
   ]);
+
+  // A link to a message that has already been dealt with is not an error worth
+  // a page for; the list below is still what the person came to see.
+  const pendingMessage = messageRes.error
+    ? null
+    : (messageRes.data as { body: string | null; dedupe_key: string } | null);
 
   const transactions = rows<TransactionWithRelations>(
     { data, error },
@@ -117,6 +138,15 @@ export default async function TransactionsPage({
         description={t('tx.count', { count: total })}
         action={<AddTransactionButton label={t('tx.add')} />}
       />
+
+      {pendingMessage?.body ? (
+        <MessageToRecord
+          accounts={rows<Account>(accountsRes, 'accounts')}
+          categories={rows<Category>(categoriesRes, 'categories')}
+          text={pendingMessage.body}
+          sourceRef={pendingMessage.dedupe_key}
+        />
+      ) : null}
 
       <Suspense fallback={<Skeleton className="h-9 w-full" />}>
         <TransactionFilters

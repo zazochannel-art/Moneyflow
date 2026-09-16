@@ -95,3 +95,16 @@ test('a total across two currencies is converted, not added up', async ({ page }
   // a plain one are indistinguishable on screen otherwise.
   await expect(page.locator('body')).toContainText(/aproximativ|approximate|приблизительный/i);
 });
+
+test('an unreadable bank message can be turned into a transaction', async ({ page }) => {
+  await signIn(page);
+  await page.goto('/transactions?message=sms%3Asmoketest');
+
+  // The text as the bank sent it, and a form to record it. Before this the
+  // notification showed the message and offered nothing to do about it, which
+  // left the only honest options as inventing the transaction by hand or
+  // letting the money go unrecorded.
+  await expect(page.locator('body')).toContainText('SMOKE UNREADABLE MESSAGE');
+  await expect(page.locator('input[name="amount"]')).toBeVisible();
+  await expect(page.locator('input[name="source_ref"]')).toHaveValue('sms:smoketest');
+});
