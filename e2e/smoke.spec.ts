@@ -113,3 +113,67 @@ test('an unreadable bank message can be turned into a transaction', async ({ pag
   await expect(page.locator('input[name="amount"]')).toBeVisible();
   await expect(page.locator('input[name="source_ref"]')).toHaveValue('sms:smoketest');
 });
+
+/**
+ * Writes straight to the database, the way the SMS endpoint does — no browser
+ * involved, so nothing on the open page has any reason to know.
+ */
+async function writeOutOfBand(path: string, body?: unknown): Promise<unknown> {
+  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are needed to write behind the app');
+  }
+
+  const response = await fetch(`${url}${path}`, {
+    method: body ? 'POST' : 'GET',
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const text = await response.text();
+  if (!response.ok) throw new Error(`${path} -> ${response.status}: ${text}`);
+  return text ? JSON.parse(text) : null;
+}
+
+test('a purchase that arrives while the app is open shows up without a reload', async ({ page }) => {
+  const [seedAccount] = (await writeOutOfBand(
+    '/rest/v1/accounts?name=eq.Smoke%20card&select=id,user_id',
+  )) as Array<{ id: string; user_id: string }>;
+
+  await signIn(page);
+  await page.goto('/transactions');
+  await expect(page.locator('body')).not.toContainText('LIVE MERCHANT');
+
+  // Its own account, left out of the totals, so this test cannot move a number
+  // another test asserts.
+  const [account] = (await writeOutOfBand('/rest/v1/accounts', {
+    user_id: seedAccount.user_id,
+    name: 'Smoke live',
+    type: 'cash',
+    currency: 'MDL',
+    balance: 0,
+    include_in_total: false,
+  })) as Array<{ id: string }>;
+
+  await writeOutOfBand('/rest/v1/transactions', {
+    user_id: seedAccount.user_id,
+    account_id: account.id,
+    type: 'expense',
+    amount: 42.5,
+    description: 'LIVE MERCHANT',
+    date: new Date().toISOString().slice(0, 10),
+    source: 'sms',
+  });
+
+  // No reload, no navigation: the page has to notice by itself. Under a second
+  // over the socket; a little over two if it fell back to asking on a timer.
+  // Either way this is the difference between the app telling you and you
+  // restarting it to find out.
+  await expect(page.locator('body')).toContainText('LIVE MERCHANT', { timeout: 8_000 });
+});

@@ -33,6 +33,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
     <AppShell
       lang={await getLanguage(profile.language)}
       currency={profile.currency}
+      userId={user.id}
       name={profile.name}
       email={user.email ?? ''}
       accounts={rows<Account>(accountsRes, 'accounts')}

@@ -341,6 +341,39 @@ begin
   raise notice 'ensure_rls is the only event trigger';
 end $$;
 
+\echo '--- what an open app is told about ---'
+-- A table dropped out of this publication takes the live updates with it and
+-- breaks nothing else: the app still works, it just goes back to showing what
+-- it loaded until someone restarts it. That is a silent regression, so the two
+-- tables are named here.
+do $$
+declare
+  missing text;
+begin
+  select string_agg(t, ', ') into missing
+    from unnest(array['transactions', 'notifications']) as t
+   where not exists (
+     select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+   );
+  if missing is not null then
+    raise exception 'not published for realtime: %', missing;
+  end if;
+
+  -- A filtered subscription cannot match a deleted row unless the whole row is
+  -- replicated, so a delete elsewhere would leave the row on screen here.
+  select string_agg(c.relname, ', ') into missing
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public'
+     and c.relname in ('transactions', 'notifications')
+     and c.relreplident <> 'f';
+  if missing is not null then
+    raise exception 'replica identity is not full on: %', missing;
+  end if;
+
+  raise notice 'transactions and notifications reach an open app as they happen';
+end $$;
+
 \echo '--- the foreign keys the app joins on by name still exist ---'
 -- These are not decoration. The app asks PostgREST to embed accounts and
 -- categories into a transaction row and names the key to join on, as a string
