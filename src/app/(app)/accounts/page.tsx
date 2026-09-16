@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { AccountsView } from '@/components/accounts/accounts-view';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/supabase/user';
 import type { Account, Profile } from '@/lib/types/database';
 
 export const metadata: Metadata = { title: 'Conturi' };
@@ -9,9 +10,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function AccountsPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect('/login');
 
   const [accountsRes, profileRes] = await Promise.all([

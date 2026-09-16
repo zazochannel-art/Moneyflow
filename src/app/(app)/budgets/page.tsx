@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { BudgetsView, type BudgetRow } from '@/components/budgets/budgets-view';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/supabase/user';
 import { currentMonth, monthRange } from '@/lib/finance/period';
 import type { BudgetCategory, Category, Profile, Transaction } from '@/lib/types/database';
 
@@ -28,9 +29,7 @@ export default async function BudgetsPage({
   const { from, to } = monthRange(ref);
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect('/login');
 
   const [categoriesRes, budgetRes, txRes, profileRes] = await Promise.all([

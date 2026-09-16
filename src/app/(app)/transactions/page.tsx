@@ -9,6 +9,7 @@ import { TransactionFilters } from '@/components/transactions/transaction-filter
 import { TransactionList } from '@/components/transactions/transaction-list';
 import { AddTransactionButton } from '@/components/transactions/add-transaction-button';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/supabase/user';
 import { getT } from '@/lib/i18n/server';
 import type { Account, Category, TransactionWithRelations } from '@/lib/types/database';
 
@@ -45,9 +46,7 @@ export default async function TransactionsPage({
   const search = single('q')?.trim();
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect('/login');
 
   let query = supabase

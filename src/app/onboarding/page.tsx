@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { Wallet } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/supabase/user';
 import { I18nProvider } from '@/lib/i18n/context';
 import { getLanguage, getT } from '@/lib/i18n/server';
 import type { Category, Profile } from '@/lib/types/database';
@@ -11,9 +12,7 @@ export const metadata: Metadata = { title: 'Configurare' };
 
 export default async function OnboardingPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) redirect('/login');
 

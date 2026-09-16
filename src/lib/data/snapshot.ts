@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/supabase/user';
 import type {
   Account,
   Budget,
@@ -118,9 +119,7 @@ const TX_SELECT = `
  */
 export async function getFinancialSnapshot(clock = new Date()): Promise<FinancialSnapshot | null> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return null;
 
   // The profile is read before anything else, on its own, because it carries

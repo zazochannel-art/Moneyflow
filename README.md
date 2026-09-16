@@ -105,6 +105,15 @@ Import the repository, add the three `NEXT_PUBLIC_*` variables (and
 production URL so password-reset links point at the right place — that is what
 password-reset and email-confirmation links are built from.
 
+**Put the functions next to the database.** `vercel.json` pins them to `dub1`
+(Dublin) because the Supabase project is in `eu-west-1`. Rendering a page takes
+several round trips to the database, one after another — the session, the
+profile, then the queries that depend on it — so every millisecond between the
+two is paid several times per page. Left in the default US region against an
+Irish database, that is most of the time it takes a page to open, and none of it
+shows up in a profiler pointed at the code. If you move the Supabase project,
+move this too: the two belong in the same place.
+
 ---
 
 ## The daily budget

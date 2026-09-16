@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/supabase/user';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
@@ -13,9 +14,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
  */
 export async function requireUser(): Promise<{ supabase: SupabaseClient; userId: string } | null> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) return null;
   return { supabase, userId: user.id };
