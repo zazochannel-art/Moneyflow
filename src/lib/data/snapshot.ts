@@ -99,12 +99,26 @@ export interface FinancialSnapshot {
   now: Date;
 }
 
+/*
+ * The `!name` after each table is the foreign key PostgREST should join on, and
+ * it has to be a key that exists. These used to name the single-column keys
+ * from the first migration; the ownership hardening replaced those with
+ * composite ones on `(id, user_id)` — same relationships, different names — and
+ * these strings kept pointing at keys that were gone.
+ *
+ * PostgREST answers an unresolvable embed with an error, and the code below
+ * used to turn that error into an empty list. So the app did not break: it
+ * calmly reported that you had no transactions. Renaming a key here is a
+ * change to a query; `supabase/tests/01_schema_checks.sql` asserts these three
+ * names still exist, and `tests/postgrest-hints.test.ts` asserts the code uses
+ * no others.
+ */
 const TX_SELECT = `
   id, user_id, account_id, to_account_id, category_id, goal_id, recurring_id,
   type, amount, description, notes, date, created_at, updated_at,
-  category:categories!transactions_category_id_fkey (id, name, icon, color),
-  account:accounts!transactions_account_id_fkey (id, name, color, type),
-  to_account:accounts!transactions_to_account_id_fkey (id, name, color, type)
+  category:categories!transactions_category_owner_fkey (id, name, icon, color),
+  account:accounts!transactions_account_owner_fkey (id, name, color, type),
+  to_account:accounts!transactions_to_account_owner_fkey (id, name, color, type)
 `;
 
 /**
@@ -182,6 +196,16 @@ export async function getFinancialSnapshot(clock = new Date()): Promise<Financia
     balance: num(a.balance),
   }));
   const categories = (categoriesRes.data ?? []) as Category[];
+  // Every number this app is for — today's budget, what is left this month,
+  // whether you can afford something — is computed from these rows. A query
+  // that failed and one that found nothing are the same empty array, and the
+  // difference between them is the difference between "you have not spent
+  // anything" and "I do not know what you spent". Only the first is safe to
+  // show, so the second stops here.
+  if (txRes.error) {
+    throw new Error(`Could not read transactions: ${txRes.error.message}`);
+  }
+
   const transactions = ((txRes.data ?? []) as unknown as TransactionWithRelations[]).map((t) => ({
     ...t,
     amount: num(t.amount),

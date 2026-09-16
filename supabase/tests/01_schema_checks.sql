@@ -256,6 +256,39 @@ begin
 end $$;
 
 
+\echo '--- the foreign keys the app joins on by name still exist ---'
+-- These are not decoration. The app asks PostgREST to embed accounts and
+-- categories into a transaction row and names the key to join on, as a string
+-- inside a query. Nothing in TypeScript checks that string. When the ownership
+-- hardening replaced the single-column keys with composite ones, the names in
+-- the code went stale, every one of those queries failed, and the failure was
+-- read as "no rows" -- so the app reported an empty ledger while the rows were
+-- right here. Rename one of these and this fails before anyone sees that again.
+do $$
+declare
+  missing text;
+begin
+  select string_agg(want, ', ')
+    into missing
+    from unnest(array[
+      'transactions_account_owner_fkey',
+      'transactions_to_account_owner_fkey',
+      'transactions_category_owner_fkey'
+    ]) as want
+   where not exists (
+     select 1 from pg_constraint
+      where conname = want
+        and conrelid = 'public.transactions'::regclass
+        and contype = 'f'
+   );
+
+  if missing is not null then
+    raise exception 'the app joins on these by name and they are gone: %', missing;
+  end if;
+
+  raise notice 'the foreign keys named in the app queries are all present';
+end $$;
+
 \echo '--- SMS ingest writes only for a valid token ---'
 -- The forwarder has no session: the token is the whole of its authority. These
 -- assert that it is also the whole of its reach.
