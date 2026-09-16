@@ -105,6 +105,13 @@ Import the repository, add the three `NEXT_PUBLIC_*` variables (and
 production URL so password-reset links point at the right place — that is what
 password-reset and email-confirmation links are built from.
 
+**Phone notifications (optional).** Generate a VAPID pair once with
+`npx web-push generate-vapid-keys`, then set `NEXT_PUBLIC_VAPID_PUBLIC_KEY`,
+`VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a `mailto:` for you). Without them the
+settings screen says notifications are not configured rather than offering a
+switch that does nothing. On iPhone they only work once the app is on the Home
+Screen — Safari in a tab cannot subscribe at all.
+
 **Put the functions next to the database.** `vercel.json` pins them to `dub1`
 (Dublin) because the Supabase project is in `eu-west-1`. Rendering a page takes
 several round trips to the database, one after another — the session, the

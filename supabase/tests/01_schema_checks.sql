@@ -186,16 +186,26 @@ declare
 begin
   -- Trigger-returning functions are left out: PostgreSQL refuses to call them
   -- outside a trigger, so a grant on one is not a way in.
-  -- `ingest_sms` is the one on purpose: the SMS forwarder has no session, so a
-  -- token is its credential and the function checks it before writing anything.
-  -- Named here rather than exempted by a pattern, so adding a second one is a
+  -- Two are on purpose, both belonging to the SMS forwarder, which has no
+  -- session and carries a token as its whole credential.
+  --
+  -- `ingest_sms` checks that token before writing anything.
+  --
+  -- `sms_push_targets` reads back where to send a notification for that token's
+  -- owner. It widens what a stolen token can learn -- the push addresses of the
+  -- phone -- and that is the trade made knowingly: the same token can already
+  -- write transactions into the account, and without this no notification ever
+  -- arrives for the one message the app could not read, which is the case the
+  -- feature exists for.
+  --
+  -- Named here rather than exempted by a pattern, so adding a third one is a
   -- decision someone has to write down.
   select string_agg(p.proname, ', ') into leaked
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public'
      and p.prosecdef
      and p.prorettype <> 'trigger'::regtype
-     and p.proname <> 'ingest_sms'
+     and p.proname not in ('ingest_sms', 'sms_push_targets')
      and has_function_privilege('anon', p.oid, 'EXECUTE');
   if leaked is not null then
     raise exception 'anon can execute SECURITY DEFINER function(s): %', leaked;
@@ -214,7 +224,7 @@ begin
    where n.nspname = 'public'
      and p.prosecdef
      and p.prorettype <> 'trigger'::regtype
-     and p.proname not in ('mf_delete_account', 'ingest_sms')
+     and p.proname not in ('mf_delete_account', 'ingest_sms', 'sms_push_targets')
      and has_function_privilege('authenticated', p.oid, 'EXECUTE');
   if unexpected is not null then
     raise exception 'signed-in users can execute unexpected SECURITY DEFINER function(s): %', unexpected;

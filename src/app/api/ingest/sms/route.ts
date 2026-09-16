@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { parseBankSms, smsFingerprint } from '@/lib/sms/parse';
+import { sendPush, type PushTarget } from '@/lib/push/send';
 
 // Nothing here is cacheable: every call is a write, and the phone sends one per
 // purchase.
@@ -58,6 +59,14 @@ export async function POST(request: Request) {
       p_raw: text,
     });
 
+    // The bell already has it. This is the same sentence, delivered to the
+    // phone, because the whole point of the unreadable case is that nobody is
+    // looking at the app when it happens.
+    await notify(supabase, token, {
+      title: 'Mesaj neînțeles de la bancă',
+      body: text.slice(0, 120),
+    });
+
     return NextResponse.json({ status: 'skipped', reason: 'unrecognised' });
   }
 
@@ -77,9 +86,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: 'error' }, { status: 500 });
   }
 
+  if (data) {
+    await notify(supabase, token, {
+      title: `−${tx.amount} ${tx.currency}`,
+      body: tx.merchant ?? '',
+      url: '/transactions',
+    });
+  }
+
   // A null id means the token was wrong, or this exact message already landed.
   // The two are answered the same way on purpose: an endpoint that tells a
-  // caller which of those it was becomes a way to test tokens.
+  // caller which of those it was becomes a way to test tokens. Nothing is
+  // pushed in that case either, for the same reason.
   return NextResponse.json(
     data ? { status: 'recorded', amount: tx.amount, merchant: tx.merchant } : { status: 'ignored' },
   );
@@ -113,4 +131,34 @@ async function readRequest(request: Request): Promise<{ token: string; text: str
 
   const body = await request.text().catch(() => '');
   return { token: headerToken || queryToken, text: body.slice(0, MAX_BODY) };
+}
+
+/**
+ * Sends the same news to the phone, and never lets that failure matter.
+ *
+ * The transaction is already written by the time this runs. A push service
+ * being unreachable, or the phone having revoked its subscription, cannot be
+ * allowed to turn a recorded expense into an error — so every path here ends
+ * quietly.
+ */
+async function notify(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  token: string,
+  message: { title: string; body: string; url?: string },
+): Promise<void> {
+  try {
+    const { data, error } = await supabase.rpc('sms_push_targets', { p_token: token });
+    if (error || !data) return;
+
+    const targets = data as PushTarget[];
+    const { expired } = await sendPush(targets, message);
+
+    // A push service that says a subscription is gone is telling the truth;
+    // keeping it would mean trying forever.
+    if (expired.length > 0) {
+      await supabase.from('push_subscriptions').delete().in('endpoint', expired);
+    }
+  } catch (error) {
+    console.error('[moneyflow] could not notify the phone:', error);
+  }
 }
