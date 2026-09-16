@@ -32,6 +32,7 @@ const PAGES: Array<{ path: string; expect: RegExp }> = [
   { path: '/reports', expect: /Rapoarte|Reports/i },
   { path: '/afford', expect: /permit|afford/i },
   { path: '/settings', expect: /Setări|Settings/i },
+  { path: '/import', expect: /extras|statement|выписк/i },
   { path: '/assistant', expect: /Asistent|Assistant/i },
 ];
 

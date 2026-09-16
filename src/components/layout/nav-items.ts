@@ -12,6 +12,7 @@ import {
   Sparkles,
   Wallet,
   FileText,
+  FileUp,
 } from 'lucide-react';
 import type { TranslationKey } from '@/lib/i18n';
 
@@ -38,6 +39,7 @@ export const SECONDARY_NAV: NavItem[] = [
   { href: '/assistant', labelKey: 'nav.assistant', icon: Bot, shortcut: 'i' },
   { href: '/reports', labelKey: 'nav.reports', icon: FileText, shortcut: 'p' },
   { href: '/accounts', labelKey: 'nav.accounts', icon: Wallet, shortcut: 'c' },
+  { href: '/import', labelKey: 'nav.import', icon: FileUp, shortcut: 'm' },
   { href: '/settings', labelKey: 'nav.settings', icon: Settings, shortcut: 's' },
 ];
 
