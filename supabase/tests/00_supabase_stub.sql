@@ -7,9 +7,22 @@
 -- RLS policies actually behave before anyone points them at a real project.
 -- ===========================================================================
 
-create role anon nologin;
-create role authenticated nologin;
-create role service_role nologin;
+-- Roles live in the cluster, not in the schema, so `drop schema public cascade`
+-- leaves them behind and a second run of the script used to fail on the first
+-- line of this file. Created only when absent, so pointing the script at the
+-- same scratch database twice works.
+do $$
+begin
+  if not exists (select 1 from pg_roles where rolname = 'anon') then
+    create role anon nologin;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+    create role authenticated nologin;
+  end if;
+  if not exists (select 1 from pg_roles where rolname = 'service_role') then
+    create role service_role nologin;
+  end if;
+end $$;
 
 create schema if not exists auth;
 

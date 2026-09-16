@@ -175,6 +175,17 @@ every day and month boundary is derived from it.
 
 ## Security
 
+**Nothing reaches production that no migration describes.** `verify-schema.sh`
+proves the migrations build a database that behaves; it cannot prove the live
+database *is* that database. `compare-live-schema.sh` does that, listing every
+function, event trigger, table with its RLS state, and policy on both sides and
+diffing them. It exists because an event trigger — the one that switches Row
+Level Security on for any new table in `public` — ran in production for weeks
+while no file here created it, so a deployment rebuilt from this repository
+would have come up without the safety net and nothing would have said so.
+
+
+
 Every table has Row Level Security enabled **and forced**, with policies keyed on
 `user_id = auth.uid()` for select, insert, update and delete. There is no
 service-role key in the application and no admin path: the browser and the
@@ -214,6 +225,10 @@ npm run check        # typecheck + lint + unit tests
 npm test             # unit tests only
 npm run icons        # regenerate the app icons
 scripts/verify-schema.sh   # apply migrations to a throwaway PostgreSQL and assert behaviour
+
+# Does the live database match what those migrations describe?
+LIVE_DATABASE_URL=postgres://... DATABASE_URL=postgres://...scratch... \
+  scripts/compare-live-schema.sh
 ```
 
 `scripts/verify-schema.sh` needs a PostgreSQL 15+ (`DATABASE_URL`, or `initdb`

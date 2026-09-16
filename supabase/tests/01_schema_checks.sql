@@ -184,8 +184,12 @@ do $$
 declare
   leaked text;
 begin
-  -- Trigger-returning functions are left out: PostgreSQL refuses to call them
-  -- outside a trigger, so a grant on one is not a way in.
+  -- Trigger- and event-trigger-returning functions are left out: PostgreSQL
+  -- refuses to call either outside its trigger context -- `select
+  -- public.rls_auto_enable()` answers `0A000: trigger functions can only be
+  -- called as triggers` -- so a grant on one is not a way in. Supabase's own
+  -- database linter reports `rls_auto_enable` as callable by anon for exactly
+  -- this reason, and is wrong about it.
   -- Two are on purpose, both belonging to the SMS forwarder, which has no
   -- session and carries a token as its whole credential.
   --
@@ -204,7 +208,7 @@ begin
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public'
      and p.prosecdef
-     and p.prorettype <> 'trigger'::regtype
+     and p.prorettype not in ('trigger'::regtype, 'event_trigger'::regtype)
      and p.proname not in ('ingest_sms', 'sms_push_targets')
      and has_function_privilege('anon', p.oid, 'EXECUTE');
   if leaked is not null then
@@ -231,7 +235,7 @@ begin
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public'
      and p.prosecdef
-     and p.prorettype <> 'trigger'::regtype
+     and p.prorettype not in ('trigger'::regtype, 'event_trigger'::regtype)
      and p.proname not in ('mf_delete_account', 'mf_run_due_recurring', 'ingest_sms', 'sms_push_targets')
      and has_function_privilege('authenticated', p.oid, 'EXECUTE');
   if unexpected is not null then
@@ -301,6 +305,41 @@ begin
   raise notice 'every mf_ RPC but the scheduler pair is callable by signed-in users';
 end $$;
 
+
+\echo '--- a new table cannot arrive unprotected ---'
+-- Not "the trigger exists" but "the trigger works": a table is created with no
+-- mention of Row Level Security, and RLS has to be on by the time the statement
+-- finishes. This is the check that would have noticed the event trigger was
+-- missing from the repository while running in production.
+do $$
+declare
+  protected boolean;
+begin
+  create table public.rls_probe (id integer);
+  select relrowsecurity into protected from pg_class where oid = 'public.rls_probe'::regclass;
+  drop table public.rls_probe;
+
+  if not coalesce(protected, false) then
+    raise exception 'a table created in public did not get Row Level Security';
+  end if;
+  raise notice 'a table created without RLS gets it anyway';
+end $$;
+
+-- An event trigger runs as its owner on every DDL statement in the database, so
+-- the set of them is as security-relevant as the set of definer functions, and
+-- is pinned the same way: by name, so a new one is something someone wrote down.
+do $$
+declare
+  unexpected text;
+begin
+  select string_agg(evtname, ', ') into unexpected
+    from pg_event_trigger
+   where evtname not in ('ensure_rls');
+  if unexpected is not null then
+    raise exception 'unexpected event trigger(s): %', unexpected;
+  end if;
+  raise notice 'ensure_rls is the only event trigger';
+end $$;
 
 \echo '--- the foreign keys the app joins on by name still exist ---'
 -- These are not decoration. The app asks PostgREST to embed accounts and
