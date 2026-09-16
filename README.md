@@ -112,6 +112,22 @@ settings screen says notifications are not configured rather than offering a
 switch that does nothing. On iPhone they only work once the app is on the Home
 Screen — Safari in a tab cannot subscribe at all.
 
+**Recurring charges on a clock.** `vercel.json` schedules `/api/cron/recurring`
+once a day. Set `CRON_SECRET` to anything long and random — Vercel presents it
+as a bearer token and the route refuses everything else — and
+`SUPABASE_SERVICE_ROLE_KEY` to the project's service role key, which is used
+there and nowhere else in the app.
+
+Without those two the job answers `503` and nothing else changes: the dashboard
+still posts the current user's due charges when it opens, the way it always
+did. With them, a charge posts on its due date whether or not anyone opens the
+app, and the phone is told — which is the only way a notification about a bill
+can ever reach you, since nothing runs while the app is closed.
+
+The service role key bypasses Row Level Security entirely. It belongs in a
+server-side variable and must never be given a `NEXT_PUBLIC_` name, which would
+ship it to every browser.
+
 **Put the functions next to the database.** `vercel.json` pins them to `dub1`
 (Dublin) because the Supabase project is in `eu-west-1`. Rendering a page takes
 several round trips to the database, one after another — the session, the

@@ -217,19 +217,49 @@ do $$
 declare
   unexpected text;
 begin
-  -- `mf_delete_account` is the one on purpose: it must reach `auth.users`, and
-  -- it only ever deletes the caller's own id.
+  -- Two on purpose, both taking no arguments and both acting only on the user
+  -- `auth.uid()` names, so a caller has nothing to aim elsewhere.
+  --
+  -- `mf_delete_account` must reach `auth.users`, and only ever deletes the
+  -- caller's own id.
+  --
+  -- `mf_run_due_recurring` posts the caller's own due charges by delegating to
+  -- a function that takes the user as an argument -- which is withheld from
+  -- sessions precisely because that argument is aimable. Definer is what lets
+  -- the safe door call through the locked one.
   select string_agg(p.proname, ', ') into unexpected
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public'
      and p.prosecdef
      and p.prorettype <> 'trigger'::regtype
-     and p.proname not in ('mf_delete_account', 'ingest_sms', 'sms_push_targets')
+     and p.proname not in ('mf_delete_account', 'mf_run_due_recurring', 'ingest_sms', 'sms_push_targets')
      and has_function_privilege('authenticated', p.oid, 'EXECUTE');
   if unexpected is not null then
     raise exception 'signed-in users can execute unexpected SECURITY DEFINER function(s): %', unexpected;
   end if;
-  raise notice 'mf_delete_account is the only definer function signed-in users can call';
+  raise notice 'only the two argument-free definer functions are callable by signed-in users';
+end $$;
+
+-- The scheduler posts charges on behalf of any user, which is exactly the power
+-- no session may borrow. Asserted from both directions: the two functions the
+-- job uses are out of reach, and the one the dashboard calls still works.
+do $$
+begin
+  if has_function_privilege('anon', 'public.mf_run_due_recurring_all()', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.mf_run_due_recurring_all()', 'EXECUTE') then
+    raise exception 'mf_run_due_recurring_all is reachable from a session';
+  end if;
+
+  if has_function_privilege('anon', 'public.mf_run_due_recurring_for(uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.mf_run_due_recurring_for(uuid)', 'EXECUTE') then
+    raise exception 'mf_run_due_recurring_for is reachable from a session';
+  end if;
+
+  if not has_function_privilege('authenticated', 'public.mf_run_due_recurring()', 'EXECUTE') then
+    raise exception 'signed-in users can no longer run their own due charges';
+  end if;
+
+  raise notice 'the scheduler runs for everyone; only the caller-scoped version is reachable';
 end $$;
 
 drop table stranger_ids;
@@ -254,15 +284,21 @@ do $$
 declare
   missing text;
 begin
+  -- Two are withheld on purpose. They post charges for a user named in the
+  -- argument, or for everyone at once, which is the scheduler's job and no
+  -- session's business; `mf_run_due_recurring()` is the door left open, and it
+  -- can only ever act on the caller. Named here so that withholding a third
+  -- one has to be written down, the same way granting one does.
   select string_agg(p.proname, ', ') into missing
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public'
      and p.proname like 'mf\_%'
+     and p.proname not in ('mf_run_due_recurring_for', 'mf_run_due_recurring_all')
      and not has_function_privilege('authenticated', p.oid, 'EXECUTE');
   if missing is not null then
     raise exception 'signed-in users lost access to RPC(s): %', missing;
   end if;
-  raise notice 'every mf_ RPC is still callable by signed-in users';
+  raise notice 'every mf_ RPC but the scheduler pair is callable by signed-in users';
 end $$;
 
 
@@ -524,13 +560,81 @@ reset role;
 reset role;
 set request.jwt.claim.sub = '22222222-2222-2222-2222-222222222222';
 set role authenticated;
-insert into public.recurring_transactions (user_id, name, amount, type, frequency, next_date, account_id)
-select auth.uid(), 'Netflix', 150, 'expense', 'monthly', current_date - 40,
-       (select id from public.accounts where user_id = auth.uid() limit 1);
-select public.mf_run_due_recurring() as posted_first_run;
-select public.mf_run_due_recurring() as posted_second_run;
-select count(*) as netflix_rows from public.transactions where description = 'Netflix';
-select next_date > current_date as next_date_moved_forward from public.recurring_transactions;
+-- Asserted rather than printed. This file is run with its output discarded, so
+-- a `select ... as posted_first_run` proves nothing: only an exception fails
+-- the run, and a count nobody compares is a count nobody checks.
+do $$
+declare
+  first_run  integer;
+  second_run integer;
+  written    integer;
+  moved      boolean;
+begin
+  insert into public.recurring_transactions (user_id, name, amount, type, frequency, next_date, account_id)
+  select auth.uid(), 'Netflix', 150, 'expense', 'monthly', current_date - 40,
+         (select id from public.accounts where user_id = auth.uid() limit 1);
+
+  first_run  := public.mf_run_due_recurring();
+  second_run := public.mf_run_due_recurring();
+
+  select count(*) into written from public.transactions where description = 'Netflix';
+  select bool_and(next_date > current_date) into moved
+    from public.recurring_transactions where name = 'Netflix';
+
+  if first_run < 1 then
+    raise exception 'a charge due 40 days ago posted nothing';
+  end if;
+  if second_run <> 0 then
+    raise exception 'running again posted % more', second_run;
+  end if;
+  if written <> first_run then
+    raise exception 'reported % posted but % rows exist', first_run, written;
+  end if;
+  if not coalesce(moved, false) then
+    raise exception 'next_date did not move past today';
+  end if;
+
+  raise notice 'a due charge posts once, however many times the run happens';
+end $$;
+
+\echo '--- the scheduler posts for someone who is not signed in ---'
+reset role;
+-- A charge due for Ana, with nobody signed in as Ana. This is the case the
+-- dashboard could never cover: the app is closed, so the only thing that can
+-- notice the date has passed is a job running on a clock.
+do $$
+declare
+  ana uuid := '11111111-1111-1111-1111-111111111111';
+  posted     integer;
+  attributed boolean;
+  again      integer;
+  written    integer;
+begin
+  insert into public.recurring_transactions (user_id, name, amount, type, frequency, next_date, account_id)
+  select ana, 'Chirie', 4500, 'expense', 'monthly', current_date - 3,
+         (select id from public.accounts where user_id = ana limit 1);
+
+  select count(*), bool_and(user_id = ana) into posted, attributed
+    from public.mf_run_due_recurring_all() where name = 'Chirie';
+
+  select count(*) into again from public.mf_run_due_recurring_all();
+  select count(*) into written from public.transactions where description = 'Chirie';
+
+  if posted <> 1 then
+    raise exception 'the scheduler posted % charges for a signed-out user', posted;
+  end if;
+  if not coalesce(attributed, false) then
+    raise exception 'the scheduler attributed the charge to the wrong user';
+  end if;
+  if again <> 0 then
+    raise exception 'a second scheduler run posted % more', again;
+  end if;
+  if written <> 1 then
+    raise exception 'the charge is in the ledger % times', written;
+  end if;
+
+  raise notice 'the scheduler posts a due charge with nobody signed in, exactly once';
+end $$;
 
 \echo '--- demo seed ---'
 reset role;
