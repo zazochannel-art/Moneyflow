@@ -15,6 +15,7 @@ import { Topbar } from './topbar';
 import { KeyboardShortcuts } from './keyboard-shortcuts';
 import { InstallPrompt } from './install-prompt';
 import { OfflineBanner } from './offline-banner';
+import { LiveRefresh } from './live-refresh';
 
 /**
  * The frame every signed-in page renders inside: sidebar on desktop, a bar at
@@ -23,6 +24,7 @@ import { OfflineBanner } from './offline-banner';
 export function AppShell({
   lang,
   currency,
+  userId,
   name,
   email,
   accounts,
@@ -32,6 +34,7 @@ export function AppShell({
 }: {
   lang: LanguageCode;
   currency: CurrencyCode;
+  userId: string;
   name: string | null;
   email: string;
   accounts: Account[];
@@ -83,6 +86,7 @@ export function AppShell({
         </Suspense>
         <KeyboardShortcuts />
         <InstallPrompt />
+        <LiveRefresh userId={userId} />
       </QuickAddProvider>
     </I18nProvider>
   );

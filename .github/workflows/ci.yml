@@ -111,6 +111,10 @@ jobs:
           # Pinned so the multi-currency total is the same number every run.
           # A live rate would make the assertion move with the market.
           EXCHANGE_RATES_PROVIDER: static
+          # Lets one test write a purchase behind the app's back, the way the
+          # SMS endpoint does, and watch the open page notice.
+          SUPABASE_URL: ${{ env.API_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ env.SERVICE_ROLE_KEY }}
         run: |
           npx playwright install --with-deps chromium
           npm start &
