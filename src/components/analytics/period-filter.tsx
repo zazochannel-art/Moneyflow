@@ -4,13 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useT } from '@/lib/i18n/context';
 import type { TranslationKey } from '@/lib/i18n';
-
-export const PERIODS = ['7d', '30d', '3m', '6m', '1y'] as const;
-export type Period = (typeof PERIODS)[number];
-
-export function isPeriod(value: unknown): value is Period {
-  return typeof value === 'string' && (PERIODS as readonly string[]).includes(value);
-}
+import { PERIODS, type Period } from './periods';
 
 /** One row of range controls above the charts, as a segmented control. */
 export function PeriodFilter({ value }: { value: Period }) {
