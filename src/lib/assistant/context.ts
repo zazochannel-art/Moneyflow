@@ -5,6 +5,7 @@ import { getFinancialSnapshot, type FinancialSnapshot } from '@/lib/data/snapsho
 import { addMonths, currentMonth, monthRange, toDateOnly } from '@/lib/finance/period';
 import { goalForecast } from '@/lib/finance/afford';
 import type { MonthlyTotalsRow } from '@/lib/types/database';
+import { rows } from '@/lib/data/result';
 
 /**
  * The only thing the assistant is allowed to know.
@@ -70,7 +71,7 @@ export async function buildAssistantContext(): Promise<
     }),
   ]);
 
-  const monthlyHistory = ((historyRes.data ?? []) as MonthlyTotalsRow[]).map((row) => ({
+  const monthlyHistory = (rows<MonthlyTotalsRow>(historyRes, 'monthly history')).map((row) => ({
     period: String(row.period).slice(0, 7),
     income: Number(row.income),
     expenses: Number(row.expense),
@@ -79,7 +80,7 @@ export async function buildAssistantContext(): Promise<
   const monthsCovered = Math.max(1, monthlyHistory.length);
 
   const categoriesLast6Months = (
-    (longCategoryRes.data ?? []) as Array<{ name: string; total: number }>
+    rows<{ name: string; total: number }>(longCategoryRes, 'category totals')
   ).map((row) => ({
     name: row.name,
     total: Number(row.total),

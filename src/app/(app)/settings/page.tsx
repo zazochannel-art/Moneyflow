@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/supabase/user';
 import { siteUrl } from '@/lib/supabase/env';
 import type { Category, Profile } from '@/lib/types/database';
+import { rows } from '@/lib/data/result';
 
 export const metadata: Metadata = { title: 'Setări' };
 export const dynamic = 'force-dynamic';
@@ -44,7 +45,7 @@ export default async function SettingsPage() {
           monthly_savings_target: Number(profile.monthly_savings_target),
           emergency_fund_target: Number(profile.emergency_fund_target),
         }}
-        categories={(categoriesRes.data ?? []) as Category[]}
+        categories={rows<Category>(categoriesRes, 'categories')}
         email={user.email ?? ''}
       />
 

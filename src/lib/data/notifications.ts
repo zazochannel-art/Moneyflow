@@ -7,6 +7,7 @@ import { createTranslator } from '@/lib/i18n';
 import { getLanguage } from '@/lib/i18n/server';
 import { formatMoney } from '@/lib/format';
 import { currentMonth, daysUntilPayday, daysBetween, parseDateOnly, startOfDay, toDateOnly } from '@/lib/finance/period';
+import { rowsOrEmpty } from '@/lib/data/result';
 
 interface Draft {
   kind: string;
@@ -156,11 +157,15 @@ export async function syncNotifications(snapshot: FinancialSnapshot): Promise<vo
 
 export async function getNotifications(limit = 20): Promise<AppNotification[]> {
   const supabase = await createClient();
-  const { data } = await supabase
+  const result = await supabase
     .from('notifications')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  return (data ?? []) as AppNotification[];
+  // The one read in the app that degrades instead of failing: the bell sits in
+  // the frame of every page, and an empty bell misleads nobody about money.
+  // Taking every screen down because a notification list did not load would be
+  // the worse trade. The failure still goes to the runtime logs.
+  return rowsOrEmpty<AppNotification>(result, 'notifications');
 }

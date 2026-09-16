@@ -18,6 +18,7 @@ import { getT } from '@/lib/i18n/server';
 import { daysUntilPayday, toDateOnly } from '@/lib/finance/period';
 import { formatDate, formatMonthName } from '@/lib/format';
 import type { CategoryTotalsRow, MonthlyTotalsRow } from '@/lib/types/database';
+import { rows } from '@/lib/data/result';
 
 export const metadata: Metadata = { title: 'Panou' };
 
@@ -65,7 +66,7 @@ export default async function DashboardPage() {
   const untilPayday = daysUntilPayday(snapshot.profile.payday_day, now);
   const firstName = snapshot.profile.name?.trim().split(/\s+/)[0];
 
-  const monthly = ((monthlyRes.data ?? []) as MonthlyTotalsRow[]).map((row) => {
+  const monthly = (rows<MonthlyTotalsRow>(monthlyRes, 'monthly totals')).map((row) => {
     const date = new Date(row.period);
     return {
       label: formatMonthName(date.getFullYear(), date.getMonth() + 1, lang).split(' ')[0] ?? '',
@@ -74,7 +75,7 @@ export default async function DashboardPage() {
     };
   });
 
-  const categories = ((categoryRes.data ?? []) as CategoryTotalsRow[]).map((row) => ({
+  const categories = (rows<CategoryTotalsRow>(categoryRes, 'category totals')).map((row) => ({
     id: row.category_id,
     name: row.name,
     icon: row.icon,

@@ -6,6 +6,7 @@ import { requireUser } from '@/lib/actions/auth-guard';
 import { failure, success, type ActionResult } from '@/lib/actions/result';
 import { addMonths, monthRange } from '@/lib/finance/period';
 import type { Category, MonthlyReportData, Transaction } from '@/lib/types/database';
+import { rows } from '@/lib/data/result';
 
 const schema = z.object({
   year: z.number().int().min(2000).max(2200),
@@ -44,20 +45,23 @@ export async function generateMonthlyReport(year: number, month: number): Promis
     session.supabase.from('categories').select('id, name, color'),
   ]);
 
-  const rows = (currentRes.data ?? []) as Pick<Transaction, 'type' | 'amount' | 'category_id'>[];
-  const previousRows = (previousRes.data ?? []) as Pick<Transaction, 'type' | 'amount'>[];
-  const categories = (categoriesRes.data ?? []) as Pick<Category, 'id' | 'name' | 'color'>[];
+  const currentRows = rows<Pick<Transaction, 'type' | 'amount' | 'category_id'>>(
+    currentRes,
+    'this month transactions',
+  );
+  const previousRows = rows<Pick<Transaction, 'type' | 'amount'>>(previousRes, 'last month transactions');
+  const categories = rows<Pick<Category, 'id' | 'name' | 'color'>>(categoriesRes, 'categories');
   const categoryById = new Map(categories.map((c) => [c.id, c]));
 
-  const income = rows
+  const income = currentRows
     .filter((row) => row.type === 'income')
     .reduce((sum, row) => sum + Number(row.amount), 0);
-  const expenses = rows
+  const expenses = currentRows
     .filter((row) => row.type === 'expense')
     .reduce((sum, row) => sum + Number(row.amount), 0);
 
   const byCategory = new Map<string, number>();
-  for (const row of rows) {
+  for (const row of currentRows) {
     if (row.type !== 'expense') continue;
     const key = row.category_id ?? 'uncategorised';
     byCategory.set(key, (byCategory.get(key) ?? 0) + Number(row.amount));
@@ -91,7 +95,7 @@ export async function generateMonthlyReport(year: number, month: number): Promis
     categories: categoryTotals.slice(0, 8),
     previous: previousRows.length > 0 ? { income: previousIncome, expenses: previousExpenses } : null,
     expense_delta_pct: expenseDelta === null ? null : Math.round(expenseDelta * 10) / 10,
-    transaction_count: rows.length,
+    transaction_count: currentRows.length,
   };
 
   const { error } = await session.supabase.from('monthly_reports').upsert(

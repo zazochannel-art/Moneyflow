@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/supabase/user';
 import { currentMonth, monthRange } from '@/lib/finance/period';
 import type { BudgetCategory, Category, Profile, Transaction } from '@/lib/types/database';
+import { rows } from '@/lib/data/result';
 
 export const metadata: Metadata = { title: 'Bugete' };
 export const dynamic = 'force-dynamic';
@@ -49,19 +50,19 @@ export default async function BudgetsPage({
     supabase.from('profiles').select('currency').eq('user_id', user.id).maybeSingle(),
   ]);
 
-  const categories = (categoriesRes.data ?? []) as Category[];
+  const categories = rows<Category>(categoriesRes, 'categories');
   const planned = new Map<string, number>();
   for (const line of (budgetRes.data?.budget_categories ?? []) as BudgetCategory[]) {
     planned.set(line.category_id, Number(line.amount));
   }
 
   const spent = new Map<string, number>();
-  for (const tx of (txRes.data ?? []) as Pick<Transaction, 'category_id' | 'amount'>[]) {
+  for (const tx of rows<Pick<Transaction, 'category_id' | 'amount'>>(txRes, 'transactions')) {
     if (!tx.category_id) continue;
     spent.set(tx.category_id, (spent.get(tx.category_id) ?? 0) + Number(tx.amount));
   }
 
-  const rows: BudgetRow[] = categories.map((category) => ({
+  const budgetRows: BudgetRow[] = categories.map((category) => ({
     category: { id: category.id, name: category.name, icon: category.icon, color: category.color },
     planned: planned.get(category.id) ?? 0,
     spent: spent.get(category.id) ?? 0,
@@ -69,5 +70,5 @@ export default async function BudgetsPage({
 
   const currency = (profileRes.data as Pick<Profile, 'currency'> | null)?.currency ?? 'MDL';
 
-  return <BudgetsView year={ref.year} month={ref.month} rows={rows} currency={currency} />;
+  return <BudgetsView year={ref.year} month={ref.month} rows={budgetRows} currency={currency} />;
 }

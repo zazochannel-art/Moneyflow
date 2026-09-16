@@ -12,6 +12,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/supabase/user';
 import { getT } from '@/lib/i18n/server';
 import type { Account, Category, TransactionWithRelations } from '@/lib/types/database';
+import { rows } from '@/lib/data/result';
 
 export const metadata: Metadata = { title: 'Tranzacții' };
 export const dynamic = 'force-dynamic';
@@ -90,14 +91,10 @@ export default async function TransactionsPage({
     supabase.from('categories').select('*').order('sort_order').order('name'),
   ]);
 
-  // A list that came back empty because the query failed looks exactly like a
-  // list that came back empty because there is nothing to show — and this page
-  // says "you have no transactions yet" for both. It said that for a week.
-  if (error) {
-    throw new Error(`Could not read transactions: ${error.message}`);
-  }
-
-  const transactions = ((data ?? []) as unknown as TransactionWithRelations[]).map((t) => ({
+  const transactions = rows<TransactionWithRelations>(
+    { data, error },
+    'transactions',
+  ).map((t) => ({
     ...t,
     amount: Number(t.amount),
   }));
@@ -123,15 +120,15 @@ export default async function TransactionsPage({
 
       <Suspense fallback={<Skeleton className="h-9 w-full" />}>
         <TransactionFilters
-          accounts={(accountsRes.data ?? []) as Account[]}
-          categories={(categoriesRes.data ?? []) as Category[]}
+          accounts={rows<Account>(accountsRes, 'accounts')}
+          categories={rows<Category>(categoriesRes, 'categories')}
         />
       </Suspense>
 
       <TransactionList
         transactions={transactions}
-        accounts={(accountsRes.data ?? []) as Account[]}
-        categories={(categoriesRes.data ?? []) as Category[]}
+        accounts={rows<Account>(accountsRes, 'accounts')}
+        categories={rows<Category>(categoriesRes, 'categories')}
         filtered={filtered}
       />
 

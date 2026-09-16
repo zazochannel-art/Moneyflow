@@ -4,6 +4,7 @@ import { GoalsView } from '@/components/goals/goals-view';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/supabase/user';
 import type { Account, Goal } from '@/lib/types/database';
+import { rows } from '@/lib/data/result';
 
 export const metadata: Metadata = { title: 'Obiective' };
 export const dynamic = 'force-dynamic';
@@ -18,12 +19,12 @@ export default async function GoalsPage() {
     supabase.from('accounts').select('*').eq('is_archived', false).order('created_at'),
   ]);
 
-  const goals = ((goalsRes.data ?? []) as Goal[]).map((goal) => ({
+  const goals = (rows<Goal>(goalsRes, 'goals')).map((goal) => ({
     ...goal,
     target_amount: Number(goal.target_amount),
     current_amount: Number(goal.current_amount),
     monthly_contribution: Number(goal.monthly_contribution),
   }));
 
-  return <GoalsView goals={goals} accounts={(accountsRes.data ?? []) as Account[]} />;
+  return <GoalsView goals={goals} accounts={rows<Account>(accountsRes, 'accounts')} />;
 }

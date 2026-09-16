@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireUser } from '@/lib/actions/auth-guard';
+import { rows } from '@/lib/data/result';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,8 +48,8 @@ export async function GET(request: Request) {
 
   const results = await Promise.all(
     TABLES.map(async (table) => {
-      const { data } = await session.supabase.from(table).select('*');
-      return [table, (data ?? []) as Array<Record<string, unknown>>] as const;
+      const result = await session.supabase.from(table).select('*');
+      return [table, rows<Record<string, unknown>>(result, table)] as const;
     }),
   );
 

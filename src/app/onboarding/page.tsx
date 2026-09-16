@@ -7,6 +7,7 @@ import { I18nProvider } from '@/lib/i18n/context';
 import { getLanguage, getT } from '@/lib/i18n/server';
 import type { Category, Profile } from '@/lib/types/database';
 import { OnboardingFlow } from './onboarding-flow';
+import { rows } from '@/lib/data/result';
 
 export const metadata: Metadata = { title: 'Configurare' };
 
@@ -39,7 +40,7 @@ export default async function OnboardingPage() {
           <p className="max-w-sm text-sm text-muted-foreground">{t('onboarding.welcomeBody')}</p>
         </div>
 
-        <OnboardingFlow categories={(categoriesRes.data ?? []) as Category[]} />
+        <OnboardingFlow categories={rows<Category>(categoriesRes, 'categories')} />
       </main>
     </I18nProvider>
   );

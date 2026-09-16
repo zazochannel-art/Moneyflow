@@ -6,6 +6,7 @@ import { getCurrentUser } from '@/lib/supabase/user';
 import { getLanguage } from '@/lib/i18n/server';
 import { getNotifications } from '@/lib/data/notifications';
 import type { Account, Category, Profile } from '@/lib/types/database';
+import { rows } from '@/lib/data/result';
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient();
@@ -34,8 +35,8 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       currency={profile.currency}
       name={profile.name}
       email={user.email ?? ''}
-      accounts={(accountsRes.data ?? []) as Account[]}
-      categories={(categoriesRes.data ?? []) as Category[]}
+      accounts={rows<Account>(accountsRes, 'accounts')}
+      categories={rows<Category>(categoriesRes, 'categories')}
       notifications={notifications}
     >
       {children}
