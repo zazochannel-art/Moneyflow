@@ -392,6 +392,84 @@ begin
   raise notice 'a purchase with no account to hold it reaches the bell, as expected';
 end $$;
 
+\echo '--- a forwarded SMS is dated by the user clock, not the server one ---'
+-- `current_date` on Supabase is UTC. Between local midnight and the UTC
+-- rollover that is yesterday, so a purchase made just after midnight landed on
+-- the wrong day -- in the app whose one number is "how much can I spend today".
+-- Two zones on purpose: at any instant at least one of them is on a different
+-- date from UTC, so this cannot pass by accident on a run where they agree.
+do $$
+declare
+  stored  date;
+  local   date;
+  differed boolean := false;
+  zone    text;
+begin
+  foreach zone in array array['Pacific/Kiritimati', 'Pacific/Niue']
+  loop
+    update public.profiles set timezone = zone
+     where user_id = '22222222-2222-2222-2222-222222222222';
+
+    delete from public.transactions
+     where user_id = '22222222-2222-2222-2222-222222222222'
+       and source_ref = 'sms:zone';
+
+    perform public.ingest_sms('bob-token-0123456789abcdef', 12.00, 'expense',
+                              'ZONE', null, null, 'sms:zone');
+
+    select t.date into stored from public.transactions t
+     where t.user_id = '22222222-2222-2222-2222-222222222222'
+       and t.source_ref = 'sms:zone';
+
+    local := (now() at time zone zone)::date;
+
+    if stored is null then
+      raise exception 'no transaction was written for zone %', zone;
+    end if;
+
+    if stored <> local then
+      raise exception 'zone %: stored % but the user day is %', zone, stored, local;
+    end if;
+
+    if local <> current_date then
+      differed := true;
+    end if;
+  end loop;
+
+  if not differed then
+    raise exception 'neither zone differed from the server date; the check proved nothing';
+  end if;
+
+  raise notice 'an SMS is dated by the user own day, as expected';
+end $$;
+
+\echo '--- a timezone the server cannot read does not swallow the message ---'
+-- The profile constraint checks the shape of the name, not that the zone
+-- exists. An impossible one must not take the whole ingest down with it.
+do $$
+declare
+  written uuid;
+begin
+  update public.profiles set timezone = 'Europe/Nowhere'
+   where user_id = '22222222-2222-2222-2222-222222222222';
+
+  delete from public.transactions
+   where user_id = '22222222-2222-2222-2222-222222222222'
+     and source_ref = 'sms:badzone';
+
+  written := public.ingest_sms('bob-token-0123456789abcdef', 13.00, 'expense',
+                               'BADZONE', null, null, 'sms:badzone');
+
+  if written is null then
+    raise exception 'an unreadable timezone lost the message';
+  end if;
+
+  raise notice 'an impossible timezone falls back to the server day, as expected';
+end $$;
+
+update public.profiles set timezone = 'Europe/Chisinau'
+ where user_id = '22222222-2222-2222-2222-222222222222';
+
 \echo '--- a token is only ever visible to its owner ---'
 set request.jwt.claim.sub = '11111111-1111-1111-1111-111111111111';
 set role authenticated;
