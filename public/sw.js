@@ -89,3 +89,56 @@ self.addEventListener('fetch', function (event) {
     );
   }
 });
+
+/*
+ * Push.
+ *
+ * The bell inside the app fills itself, but it is only seen by someone who
+ * opened the app — and the moment that matters, a bank message the parser could
+ * not read, is exactly the moment the app is closed. On an iPhone this only
+ * works for a PWA added to the Home Screen, which is how this one is used.
+ */
+self.addEventListener('push', function (event) {
+  var payload = { title: 'MONEYFLOW', body: '', url: '/dashboard' };
+
+  if (event.data) {
+    try {
+      var parsed = event.data.json();
+      payload.title = parsed.title || payload.title;
+      payload.body = parsed.body || '';
+      payload.url = parsed.url || payload.url;
+    } catch (error) {
+      payload.body = event.data.text();
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      data: { url: payload.url },
+      // Two messages about the same purchase should replace each other rather
+      // than stack; the tag is the dedupe key the server sends.
+      tag: (event.data && payload.tag) || undefined,
+    })
+  );
+});
+
+self.addEventListener('notificationclick', function (event) {
+  event.notification.close();
+  var target = (event.notification.data && event.notification.data.url) || '/dashboard';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (windows) {
+      // Reuse a window that is already open rather than piling up new ones.
+      for (var i = 0; i < windows.length; i += 1) {
+        if ('focus' in windows[i]) {
+          windows[i].navigate(target);
+          return windows[i].focus();
+        }
+      }
+      return self.clients.openWindow(target);
+    })
+  );
+});

@@ -261,3 +261,55 @@ export async function revokeSmsTokens(): Promise<ActionResult> {
   revalidatePath('/settings');
   return success();
 }
+
+const subscriptionSchema = z.object({
+  endpoint: z.string().url().max(1000),
+  p256dh: z.string().min(10).max(500),
+  auth: z.string().min(5).max(500),
+});
+
+/**
+ * Remembers where to reach this phone.
+ *
+ * The endpoint is unique per installation, so re-subscribing the same device —
+ * which browsers do on their own schedule — updates the row rather than piling
+ * up copies that would each get a duplicate of every notification.
+ */
+export async function savePushSubscription(input: unknown): Promise<ActionResult> {
+  const session = await requireUser();
+  if (!session) return failure('auth.error.session');
+
+  const parsed = subscriptionSchema.safeParse(input);
+  if (!parsed.success) return failure('common.somethingWrong');
+
+  const { error } = await session.supabase.from('push_subscriptions').upsert(
+    {
+      user_id: session.userId,
+      endpoint: parsed.data.endpoint,
+      p256dh: parsed.data.p256dh,
+      auth: parsed.data.auth,
+    },
+    { onConflict: 'endpoint' },
+  );
+
+  if (error) return failure('common.somethingWrong');
+
+  revalidatePath('/settings');
+  return success(undefined, 'push.on');
+}
+
+/** Forgets this phone. The browser unsubscribes on its side separately. */
+export async function removePushSubscription(endpoint: string): Promise<ActionResult> {
+  const session = await requireUser();
+  if (!session) return failure('auth.error.session');
+
+  const { error } = await session.supabase
+    .from('push_subscriptions')
+    .delete()
+    .eq('endpoint', endpoint);
+
+  if (error) return failure('common.somethingWrong');
+
+  revalidatePath('/settings');
+  return success(undefined, 'push.off');
+}

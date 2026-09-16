@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { SettingsView } from '@/components/settings/settings-view';
 import { SmsForwarding } from '@/components/settings/sms-forwarding';
+import { PushNotifications } from '@/components/settings/push-notifications';
 import { createClient } from '@/lib/supabase/server';
 import { getCurrentUser } from '@/lib/supabase/user';
 import { siteUrl } from '@/lib/supabase/env';
@@ -48,6 +49,10 @@ export default async function SettingsPage() {
         categories={rows<Category>(categoriesRes, 'categories')}
         email={user.email ?? ''}
       />
+
+      <div className="mt-4">
+        <PushNotifications publicKey={process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? null} />
+      </div>
 
       <div className="mt-4">
         <SmsForwarding
