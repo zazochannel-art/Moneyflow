@@ -44,7 +44,7 @@ export function BalanceSummary({
   return (
     <Card className="p-5">
       <p className="text-sm text-muted-foreground">{t('dashboard.totalBalance')}</p>
-      <p className="mf-hero-number mt-1 text-3xl font-semibold sm:text-4xl">{money(total)}</p>
+      <p data-testid="total-balance" className="mf-hero-number mt-1 text-3xl font-semibold sm:text-4xl">{money(total)}</p>
       {note ? <p className="mt-1 text-xs text-muted-foreground">{note}</p> : null}
 
       <div className="mt-4 grid grid-cols-3 gap-2 text-sm">

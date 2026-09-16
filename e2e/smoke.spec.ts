@@ -83,13 +83,18 @@ test('a total across two currencies is converted, not added up', async ({ page }
   await signIn(page);
   await page.goto('/dashboard');
 
-  // The seed holds 5000 MDL and 100 EUR. Adding the figures gives 5100, which
-  // is a number about nothing; converting at the pinned table's 19.5 gives
-  // 6950. The app reported the first one for as long as the currency module
-  // sat in the codebase unused.
-  const shown = (await page.locator('body').innerText()).replace(/[.\s ]/g, '');
-  expect(shown).toContain('6950');
-  expect(shown).not.toContain('5100');
+  // The seed opens a card with 5000 MDL and spends 123.45 of it — the balance
+  // trigger takes that off, leaving 4876.55 — and a savings account with 100
+  // EUR. Adding the two figures gives 4976.55, a number about nothing;
+  // converting the euros at the pinned table's 19.5 gives 4876.55 + 1950 =
+  // 6826.55. The app showed the first kind of number for as long as the
+  // currency module sat in the codebase unused.
+  //
+  // Read off the total itself rather than the page text: every other figure on
+  // a dashboard is also digits, and a substring that happens to appear
+  // somewhere is not the same claim as the total being right.
+  const total = await page.getByTestId('total-balance').innerText();
+  expect(total.replace(/\D/g, '')).toBe('682655');
 
   // And it says the number went through a rate, because a converted total and
   // a plain one are indistinguishable on screen otherwise.
