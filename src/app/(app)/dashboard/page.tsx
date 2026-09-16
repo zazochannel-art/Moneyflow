@@ -37,8 +37,6 @@ export default async function DashboardPage() {
   const snapshot = await getFinancialSnapshot();
   if (!snapshot) redirect('/login');
 
-  await syncNotifications(snapshot);
-
   const { now } = snapshot;
 
   // The two charts come from the same RPCs the analytics page uses, so the
@@ -46,6 +44,10 @@ export default async function DashboardPage() {
   const trendFrom = new Date(now.getFullYear(), now.getMonth() - (TREND_MONTHS - 1), 1);
   const monthFrom = new Date(now.getFullYear(), now.getMonth(), 1);
 
+  // The notification sync only writes; nothing rendered below reads what it
+  // produced, and the bell was already filled by the layout. Waiting for it
+  // before asking for the charts bought a stale bell at the price of a round
+  // trip, so it travels with them instead.
   const [monthlyRes, categoryRes] = await Promise.all([
     supabase.rpc('mf_monthly_totals', {
       p_from: toDateOnly(trendFrom),
@@ -56,6 +58,7 @@ export default async function DashboardPage() {
       p_to: toDateOnly(now),
       p_type: 'expense',
     }),
+    syncNotifications(snapshot),
   ]);
 
   const { t, lang } = await getT(snapshot.profile.language);

@@ -2,15 +2,14 @@ import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { AppShell } from '@/components/layout/app-shell';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/supabase/user';
 import { getLanguage } from '@/lib/i18n/server';
 import { getNotifications } from '@/lib/data/notifications';
 import type { Account, Category, Profile } from '@/lib/types/database';
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
 
   if (!user) redirect('/login');
 

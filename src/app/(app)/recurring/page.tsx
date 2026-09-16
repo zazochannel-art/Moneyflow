@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { RecurringView } from '@/components/recurring/recurring-view';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/supabase/user';
 import type { Account, Category, RecurringTransaction } from '@/lib/types/database';
 
 export const metadata: Metadata = { title: 'Plăți recurente' };
@@ -19,9 +20,7 @@ const MONTHLY_FACTOR: Record<string, number> = {
 
 export default async function RecurringPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect('/login');
 
   const [entriesRes, accountsRes, categoriesRes] = await Promise.all([

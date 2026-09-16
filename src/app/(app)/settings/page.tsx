@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { SettingsView } from '@/components/settings/settings-view';
 import { SmsForwarding } from '@/components/settings/sms-forwarding';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/supabase/user';
 import { siteUrl } from '@/lib/supabase/env';
 import type { Category, Profile } from '@/lib/types/database';
 
@@ -11,9 +12,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function SettingsPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect('/login');
 
   const [profileRes, categoriesRes, tokenRes] = await Promise.all([

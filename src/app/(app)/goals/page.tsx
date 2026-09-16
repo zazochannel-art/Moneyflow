@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { GoalsView } from '@/components/goals/goals-view';
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUser } from '@/lib/supabase/user';
 import type { Account, Goal } from '@/lib/types/database';
 
 export const metadata: Metadata = { title: 'Obiective' };
@@ -9,9 +10,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function GoalsPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect('/login');
 
   const [goalsRes, accountsRes] = await Promise.all([
